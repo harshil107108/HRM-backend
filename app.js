@@ -19,10 +19,11 @@ mongoose.connect('mongodb://127.0.0.1:27017/HRM').then(() => {
     console.log("Errror in Connecting DB")
 });
 
-// Router
-const CountryMasterRouter = require("./routes/countryMaster/countryMaster");
+const CountryMasterRouter = require("./routes/Master/countryMaster");
+const CityMasterRouter = require("./routes/Master/cityMaster");
 
 app.use("/master/country", CountryMasterRouter);
+app.use("/master/city", CityMasterRouter);
 
 
 // Server
