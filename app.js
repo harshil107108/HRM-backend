@@ -1,9 +1,31 @@
-const express = require('express');
+const express = require("express");
+const cors = require("cors");
+const dotenv = require("dotenv");
 const app = express();
+const mongoose = require('mongoose');
+dotenv.config();
+const port = process.env.PORT || 5000;
 
 
+// Middleware
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cors());
 
 
-app.listen(3000, () => {
-    console.log('port runnig on 3000')
-})
+mongoose.connect('mongodb://127.0.0.1:27017/HRM').then(() => {
+    console.log("DB Connected")
+}).catch(() => {
+    console.log("Errror in Connecting DB")
+});
+
+// Router
+const CountryMasterRouter = require("./routes/countryMaster/countryMaster");
+
+app.use("/master/country", CountryMasterRouter);
+
+
+// Server
+app.listen(port, () => {
+    console.log(`Server running on port ${port}`);
+});
