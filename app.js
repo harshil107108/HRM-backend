@@ -10,7 +10,13 @@ const port = process.env.PORT || 5000;
 // Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
+app.use(cors({
+    origin: [
+        "http://localhost:5173",
+        "https://your-netlify-site.netlify.app"
+    ],
+    credentials: true
+}));
 
 
 mongoose.connect('mongodb://127.0.0.1:27017/HRM').then(() => {
