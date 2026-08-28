@@ -13,7 +13,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors({
     origin: [
         "http://localhost:5173",
-        "https://your-netlify-site.netlify.app"
+        "https://orvexa-hrm.netlify.app"
     ],
     credentials: true
 }));
