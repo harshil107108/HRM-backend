@@ -11,7 +11,7 @@ const cityMasterSchema = new mongoose.Schema(
         stateId: {
             type: mongoose.Schema.Types.ObjectId,
             required: true,
-            // ref: "StateMaster",
+            ref: "StateMaster",
         },
 
         cityCode: {

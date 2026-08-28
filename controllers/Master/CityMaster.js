@@ -2,10 +2,12 @@ const CityMaster = require("../../modals/Master/CityMasterModal");
 
 
 // GET ALL CITY
+// GET ALL CITY
 module.exports.getCity = async (req, res) => {
     try {
         const cities = await CityMaster.find({})
-            .populate("countryId");
+            .populate("countryId")
+            .populate("stateId");
 
         res.status(200).json({
             success: true,
