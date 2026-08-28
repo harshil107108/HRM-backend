@@ -13,5 +13,7 @@ router.post("/addEditCity", cityMasterController.addEditCity);
 
 router.post("/deleteCityById", cityMasterController.deleteCityById);
 
+router.post("/getCityHelp", cityMasterController.getCityHelp);
+
 
 module.exports = router;

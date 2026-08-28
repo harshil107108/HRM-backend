@@ -1,15 +1,15 @@
-const CityMaster = require("../../modals/Master/CityMasterModal");
+const StateMaster = require("../../modals/Master/StateMasterModal");
 
 
-// GET ALL CITY
-module.exports.getCity = async (req, res) => {
+// GET ALL STATE
+module.exports.getState = async (req, res) => {
     try {
-        const cities = await CityMaster.find({})
-            .populate("countryId");
+        const states = await StateMaster.find({})
+            .populate("countryId", "countryName countryCode");
 
         res.status(200).json({
             success: true,
-            data: cities
+            data: states
         });
 
     } catch (error) {
@@ -21,24 +21,24 @@ module.exports.getCity = async (req, res) => {
 };
 
 
-// GET CITY BY ID
-module.exports.getCityById = async (req, res) => {
+// GET STATE BY ID
+module.exports.getStateById = async (req, res) => {
     try {
         const { _id } = req.body;
 
-        const city = await CityMaster.findById(_id)
-            .populate("countryId");
+        const state = await StateMaster.findById(_id)
+            .populate("countryId", "countryName countryCode");
 
-        if (!city) {
+        if (!state) {
             return res.status(404).json({
                 success: false,
-                message: "City not found"
+                message: "State not found"
             });
         }
 
         res.status(200).json({
             success: true,
-            data: city
+            data: state
         });
 
     } catch (error) {
@@ -50,45 +50,45 @@ module.exports.getCityById = async (req, res) => {
 };
 
 
-// ADD / EDIT CITY
-module.exports.addEditCity = async (req, res) => {
+// ADD / EDIT STATE
+module.exports.addEditState = async (req, res) => {
     try {
-        const { _id, ...cityData } = req.body;
+        const { _id, ...stateData } = req.body;
 
-        let city;
+        let state;
 
-        // EDIT
+        // EDIT STATE
         if (_id) {
-            city = await CityMaster.findByIdAndUpdate(
+            state = await StateMaster.findByIdAndUpdate(
                 _id,
-                cityData,
+                stateData,
                 {
                     new: true,
                     runValidators: true
                 }
             );
 
-            if (!city) {
+            if (!state) {
                 return res.status(404).json({
                     success: false,
-                    message: "City not found"
+                    message: "State not found"
                 });
             }
 
             return res.status(200).json({
                 success: true,
-                message: "City updated successfully",
-                data: city
+                message: "State updated successfully",
+                data: state
             });
         }
 
-        // ADD
-        city = await CityMaster.create(cityData);
+        // ADD STATE
+        state = await StateMaster.create(stateData);
 
         res.status(201).json({
             success: true,
-            message: "City added successfully",
-            data: city
+            message: "State added successfully",
+            data: state
         });
 
     } catch (error) {
@@ -100,23 +100,23 @@ module.exports.addEditCity = async (req, res) => {
 };
 
 
-// DELETE CITY
-module.exports.deleteCityById = async (req, res) => {
+// DELETE STATE
+module.exports.deleteStateById = async (req, res) => {
     try {
         const { _id } = req.body;
 
-        const city = await CityMaster.findByIdAndDelete(_id);
+        const state = await StateMaster.findByIdAndDelete(_id);
 
-        if (!city) {
+        if (!state) {
             return res.status(404).json({
                 success: false,
-                message: "City not found"
+                message: "State not found"
             });
         }
 
         res.status(200).json({
             success: true,
-            message: "City deleted successfully"
+            message: "State deleted successfully"
         });
 
     } catch (error) {
@@ -127,37 +127,32 @@ module.exports.deleteCityById = async (req, res) => {
     }
 };
 
-// GET CITY DROPDOWN
-module.exports.getCityHelp = async (req, res) => {
+// GET STATE DROPDOWN
+module.exports.getStateHelp = async (req, res) => {
     try {
-        const { countryId, stateId } = req.body;
+        const { countryId } = req.body;
 
         const filter = {
             isActive: true
         };
 
-        // Filter by country
+        // If countryId is provided, get states of that country only
         if (countryId) {
             filter.countryId = countryId;
         }
 
-        // Filter by state
-        if (stateId) {
-            filter.stateId = stateId;
-        }
-
-        const cities = await CityMaster.find(
+        const states = await StateMaster.find(
             filter,
             {
                 _id: 1,
-                cityName: 1,
-                cityCode: 1
+                stateName: 1,
+                stateCode: 1
             }
-        ).sort({ cityName: 1 });
+        ).sort({ stateName: 1 });
 
         res.status(200).json({
             success: true,
-            data: cities
+            data: states
         });
 
     } catch (error) {

@@ -16,4 +16,7 @@ router.post("/addEditCountry", countryMasterController.addEditCountry);
 // Delete country by ID
 router.post("/deleteCountryById", countryMasterController.deleteCountryById);
 
+// Get country dropdown
+router.post("/getCountryHelp", countryMasterController.getCountryHelp);
+
 module.exports = router;

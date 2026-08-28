@@ -122,3 +122,29 @@ module.exports.deleteCountryById = async (req, res) => {
         });
     }
 };
+
+
+// GET COUNTRY DROPDOWN
+module.exports.getCountryHelp = async (req, res) => {
+    try {
+        const countries = await CountryMaster.find(
+            { isActive: true },
+            {
+                _id: 1,
+                countryName: 1
+            }
+        ).sort({ countryName: 1 });
+
+        res.status(200).json({
+            success: true,
+            data: countries
+        });
+
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message
+        });
+    }
+};
+
