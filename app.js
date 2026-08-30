@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const path = require('path')
 const app = express();
 const mongoose = require('mongoose');
 dotenv.config();
@@ -17,6 +18,10 @@ app.use(cors({
     ],
     credentials: true
 }));
+app.use(
+    "/uploads",
+    express.static(path.join(__dirname, "uploads"))
+);
 
 
 mongoose.connect('mongodb://127.0.0.1:27017/HRM').then(() => {
@@ -31,6 +36,7 @@ const StateMasterRouter = require("./routes/Master/stateMaster");
 const HolidayMasterRouter = require("./routes/Master/holidayMaster");
 const BankMasterRouter = require("./routes/Master/bankMaster");
 const EmployeeMasterRouter = require("./routes/Employee/employeeMaster");
+const CompanyMasterRouter = require("./routes/Organization/companyMaster");
 
 app.use("/master/country", CountryMasterRouter);
 app.use("/master/city", CityMasterRouter);
@@ -38,6 +44,7 @@ app.use("/master/state", StateMasterRouter);
 app.use("/master/holiday", HolidayMasterRouter);
 app.use("/employee", EmployeeMasterRouter);
 app.use("/master/bank", BankMasterRouter);
+app.use("/organization/company", CompanyMasterRouter);
 
 
 // Server
