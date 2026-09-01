@@ -37,6 +37,7 @@ const HolidayMasterRouter = require("./routes/Master/holidayMaster");
 const BankMasterRouter = require("./routes/Master/bankMaster");
 const EmployeeMasterRouter = require("./routes/Employee/employeeMaster");
 const CompanyMasterRouter = require("./routes/Organization/companyMaster");
+const BranchMasterRouter = require("./routes/Organization/branchMaster");
 
 app.use("/master/country", CountryMasterRouter);
 app.use("/master/city", CityMasterRouter);
@@ -45,6 +46,7 @@ app.use("/master/holiday", HolidayMasterRouter);
 app.use("/employee", EmployeeMasterRouter);
 app.use("/master/bank", BankMasterRouter);
 app.use("/organization/company", CompanyMasterRouter);
+app.use("/organization/branch", BranchMasterRouter);
 
 
 // Server
