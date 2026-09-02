@@ -39,6 +39,7 @@ const EmployeeMasterRouter = require("./routes/Employee/employeeMaster");
 const CompanyMasterRouter = require("./routes/Organization/companyMaster");
 const BranchMasterRouter = require("./routes/Organization/branchMaster");
 const DepartmentMasterRouter = require("./routes/Organization/departmentMaster");
+const DesignationMasterRouter = require("./routes/Organization/designation");
 
 
 app.use("/master/country", CountryMasterRouter);
@@ -50,6 +51,9 @@ app.use("/master/bank", BankMasterRouter);
 app.use("/organization/company", CompanyMasterRouter);
 app.use("/organization/branch", BranchMasterRouter);
 app.use("/organization/department", DepartmentMasterRouter);
+app.use("/organization/designation", DesignationMasterRouter);
+
+
 
 
 // Server
