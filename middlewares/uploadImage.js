@@ -55,16 +55,17 @@ const createFileUpload = (folderName, filePrefix) => {
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         ];
 
-        if (file.fieldname === "profileImage") {
-
+        if (
+            file.fieldname === "profileImage" ||
+            file.fieldname === "companyImage" ||
+            file.fieldname === "branchImage"
+        ) {
             if (imageTypes.includes(file.mimetype)) {
                 return cb(null, true);
             }
 
             return cb(
-                new Error(
-                    "Profile image must be JPG, JPEG, PNG or WEBP"
-                ),
+                new Error("Image must be JPG, JPEG, PNG or WEBP"),
                 false
             );
         }
