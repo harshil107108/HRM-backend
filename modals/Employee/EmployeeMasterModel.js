@@ -291,8 +291,7 @@ const employeeMasterSchema = new mongoose.Schema(
         },
 
         salaryStructure: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "SalaryStructureMaster",
+            type: String,
             default: null,
         },
 
@@ -304,6 +303,27 @@ const employeeMasterSchema = new mongoose.Schema(
         basicSalary: {
             type: Number,
             default: 0,
+        },
+
+        // Uploaded Documents
+        resume: {
+            type: String,
+            default: "",
+        },
+
+        offerLetter: {
+            type: String,
+            default: "",
+        },
+
+        appointmentLetter: {
+            type: String,
+            default: "",
+        },
+
+        otherDocuments: {
+            type: String,
+            default: "",
         },
 
 
@@ -336,14 +356,35 @@ const employeeMasterSchema = new mongoose.Schema(
         },
 
         userGroup: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: "UserGroupMaster",
+            type: String,
             default: null,
         },
 
         isActive: {
             type: Boolean,
             default: true,
+        },
+
+        permissions: {
+            financialView: {
+                type: Boolean,
+                default: false,
+            },
+
+            leaveApproval: {
+                type: Boolean,
+                default: false,
+            },
+
+            orgChartAdmin: {
+                type: Boolean,
+                default: false,
+            },
+
+            directoryAccess: {
+                type: Boolean,
+                default: false,
+            },
         },
     },
     {

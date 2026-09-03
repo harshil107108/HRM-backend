@@ -12,7 +12,40 @@ router.post("/getEmployeeById", employeeMasterController.getEmployeeById);
 
 router.post("/getEmployeeHelp", employeeMasterController.getEmployeeHelp);
 
-router.post("/addEditEmployee", uploadImage("employees", "employee").single("profileImage"), employeeMasterController.addEditEmployee);
+router.post(
+    "/addEditEmployee",
+
+    uploadImage("employees", "employee").fields([
+
+        {
+            name: "profileImage",
+            maxCount: 1,
+        },
+
+        {
+            name: "resume",
+            maxCount: 1,
+        },
+
+        {
+            name: "offerLetter",
+            maxCount: 1,
+        },
+
+        {
+            name: "appointmentLetter",
+            maxCount: 1,
+        },
+
+        {
+            name: "otherDocuments",
+            maxCount: 1,
+        },
+
+    ]),
+
+    employeeMasterController.addEditEmployee
+);
 
 router.post("/deleteEmployeeById", employeeMasterController.deleteEmployeeById);
 
