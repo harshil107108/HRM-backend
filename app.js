@@ -40,6 +40,7 @@ const CompanyMasterRouter = require("./routes/Organization/companyMaster");
 const BranchMasterRouter = require("./routes/Organization/branchMaster");
 const DepartmentMasterRouter = require("./routes/Organization/departmentMaster");
 const DesignationMasterRouter = require("./routes/Organization/designation");
+const JobOpeningRouter = require("./routes/Recruitment/jobOpening");
 
 
 app.use("/master/country", CountryMasterRouter);
@@ -52,6 +53,7 @@ app.use("/organization/company", CompanyMasterRouter);
 app.use("/organization/branch", BranchMasterRouter);
 app.use("/organization/department", DepartmentMasterRouter);
 app.use("/organization/designation", DesignationMasterRouter);
+app.use( "/recruitment/jobopening", JobOpeningRouter );
 
 
 

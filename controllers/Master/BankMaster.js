@@ -1,7 +1,6 @@
 const BankMaster = require("../../modals/Master/BankMasterModel");
 
 
-// GET ALL BANK
 module.exports.getBank = async (req, res) => {
     try {
         const banks = await BankMaster.find({})
