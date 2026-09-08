@@ -55,27 +55,49 @@ const createFileUpload = (folderName, filePrefix) => {
             "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         ];
 
-        if (
-            file.fieldname === "profileImage" ||
-            file.fieldname === "companyImage" ||
-            file.fieldname === "branchImage"
-        ) {
+        // ==========================================
+        // IMAGE FIELDS
+        // ==========================================
+
+        const imageFields = [
+            "profileImage",
+            "companyImage",
+            "branchImage",
+            "assetImage",
+        ];
+
+        if (imageFields.includes(file.fieldname)) {
+
             if (imageTypes.includes(file.mimetype)) {
                 return cb(null, true);
             }
 
             return cb(
-                new Error("Image must be JPG, JPEG, PNG or WEBP"),
+                new Error(
+                    "Image must be JPG, JPEG, PNG or WEBP"
+                ),
                 false
             );
         }
 
-        if (
-            file.fieldname === "resume" ||
-            file.fieldname === "offerLetter" ||
-            file.fieldname === "appointmentLetter" ||
-            file.fieldname === "otherDocuments"
-        ) {
+        // ==========================================
+        // DOCUMENT FIELDS
+        // ==========================================
+
+        const documentFields = [
+            // Employee
+            "resume",
+            "offerLetter",
+            "appointmentLetter",
+            "otherDocuments",
+
+            // Asset
+            "purchaseInvoice",
+            "warrantyDocument",
+            "otherDocument",
+        ];
+
+        if (documentFields.includes(file.fieldname)) {
 
             if (
                 imageTypes.includes(file.mimetype) ||
@@ -86,11 +108,15 @@ const createFileUpload = (folderName, filePrefix) => {
 
             return cb(
                 new Error(
-                    "Document must be PDF, DOC, DOCX, JPG, JPEG, PNG or WEBP"
+                    "Document must be PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX, JPG, JPEG, PNG or WEBP"
                 ),
                 false
             );
         }
+
+        // ==========================================
+        // UNSUPPORTED FIELD
+        // ==========================================
 
         return cb(
             new Error(
@@ -99,7 +125,6 @@ const createFileUpload = (folderName, filePrefix) => {
             false
         );
     };
-
 
     return multer({
         storage,
@@ -111,6 +136,5 @@ const createFileUpload = (folderName, filePrefix) => {
         },
     });
 };
-
 
 module.exports = createFileUpload;

@@ -7,8 +7,6 @@ const mongoose = require('mongoose');
 dotenv.config();
 const port = process.env.PORT || 5000;
 
-
-// Middleware
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({
@@ -18,11 +16,7 @@ app.use(cors({
     ],
     credentials: true
 }));
-app.use(
-    "/uploads",
-    express.static(path.join(__dirname, "uploads"))
-);
-
+app.use("/uploads",express.static(path.join(__dirname, "uploads")));
 
 mongoose.connect('mongodb://127.0.0.1:27017/HRM').then(() => {
     console.log("DB Connected")
@@ -41,24 +35,31 @@ const BranchMasterRouter = require("./routes/Organization/branchMaster");
 const DepartmentMasterRouter = require("./routes/Organization/departmentMaster");
 const DesignationMasterRouter = require("./routes/Organization/designation");
 const JobOpeningRouter = require("./routes/Recruitment/jobOpening");
+const AssetMasterRouter = require("./routes/Employee/asset");
 
 
+
+//Master
 app.use("/master/country", CountryMasterRouter);
 app.use("/master/city", CityMasterRouter);
 app.use("/master/state", StateMasterRouter);
 app.use("/master/holiday", HolidayMasterRouter);
-app.use("/employee", EmployeeMasterRouter);
 app.use("/master/bank", BankMasterRouter);
+
+//Employee
+app.use("/employee", EmployeeMasterRouter);
+app.use("/employee/asset",AssetMasterRouter);
+
+//Organization
 app.use("/organization/company", CompanyMasterRouter);
 app.use("/organization/branch", BranchMasterRouter);
 app.use("/organization/department", DepartmentMasterRouter);
 app.use("/organization/designation", DesignationMasterRouter);
+
+//Recruitment
 app.use( "/recruitment/jobopening", JobOpeningRouter );
 
 
-
-
-// Server
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });

@@ -99,9 +99,6 @@ const jobOpeningSchema = new mongoose.Schema(
             default: 0,
         },
 
-        // =========================================================
-        // HIRING INFORMATION
-        // =========================================================
 
         hiringManager: {
             type: mongoose.Schema.Types.ObjectId,

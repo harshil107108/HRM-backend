@@ -3,7 +3,6 @@ const router = express.Router();
 const companyMasterController = require("../../controllers/Organization/CompanyMaster");
 const uploadImage = require("../../middlewares/uploadImage");
 
-
 router.post("/getCompany", companyMasterController.getCompany);
 router.post("/getCompanyById", companyMasterController.getCompanyById);
 router.post("/getCompanyHelp", companyMasterController.getCompanyHelp);
