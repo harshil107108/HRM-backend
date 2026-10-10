@@ -12,6 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors({
     origin: [
         "http://localhost:5173",
+        "http://localhost:5174",
         "https://orvexa-hrm.netlify.app"
     ],
     credentials: true
@@ -36,8 +37,50 @@ const DepartmentMasterRouter = require("./routes/Organization/departmentMaster")
 const DesignationMasterRouter = require("./routes/Organization/designation");
 const JobOpeningRouter = require("./routes/Recruitment/jobOpening");
 const AssetMasterRouter = require("./routes/Employee/asset");
+const ExitRouter = require("./routes/Employee/exit");
 
+// Recruitment
+const CandidateRouter = require("./routes/Recruitment/candidate");
+const InterviewRouter = require("./routes/Recruitment/interview");
+const OfferLetterRouter = require("./routes/Recruitment/offerLetter");
+const OnboardingRouter = require("./routes/Recruitment/onboarding");
 
+// Attendance
+const AttendanceLogRouter = require("./routes/Attendance/attendanceLog");
+const ShiftRouter = require("./routes/Attendance/shift");
+const WeekendPolicyRouter = require("./routes/Attendance/weekendPolicy");
+const AttendanceRequestRouter = require("./routes/Attendance/attendanceRequest");
+
+// Leave
+const LeaveTypeRouter = require("./routes/Leave/leaveType");
+const LeavePolicyRouter = require("./routes/Leave/leavePolicy");
+const LeaveRequestRouter = require("./routes/Leave/leaveRequest");
+const LeaveBalanceRouter = require("./routes/Leave/leaveBalance");
+
+// Payroll
+const SalaryStructureRouter = require("./routes/Payroll/salaryStructure");
+const PayrollProcessRouter = require("./routes/Payroll/payrollProcess");
+const PayslipRouter = require("./routes/Payroll/payslip");
+const LoanRouter = require("./routes/Payroll/loan");
+const ReimbursementRouter = require("./routes/Payroll/reimbursement");
+const TaxManagementRouter = require("./routes/Payroll/taxManagement");
+
+// Performance
+const GoalRouter = require("./routes/Performance/goal");
+const ReviewRouter = require("./routes/Performance/review");
+const AppraisalRouter = require("./routes/Performance/appraisal");
+const FeedbackRouter = require("./routes/Performance/feedback");
+
+// Administration
+const UserRouter = require("./routes/Administration/user");
+const RoleRouter = require("./routes/Administration/role");
+const AuditLogRouter = require("./routes/Administration/auditLog");
+
+// Settings
+const SystemSettingRouter = require("./routes/Settings/systemSetting");
+
+// Dashboard
+const DashboardRouter = require("./routes/Dashboard/dashboard");
 
 //Master
 app.use("/master/country", CountryMasterRouter);
@@ -48,7 +91,8 @@ app.use("/master/bank", BankMasterRouter);
 
 //Employee
 app.use("/employee", EmployeeMasterRouter);
-app.use("/employee/asset",AssetMasterRouter);
+app.use("/employee/asset", AssetMasterRouter);
+app.use("/employee/exit", ExitRouter);
 
 //Organization
 app.use("/organization/company", CompanyMasterRouter);
@@ -57,8 +101,48 @@ app.use("/organization/department", DepartmentMasterRouter);
 app.use("/organization/designation", DesignationMasterRouter);
 
 //Recruitment
-app.use( "/recruitment/jobopening", JobOpeningRouter );
+app.use("/recruitment/jobopening", JobOpeningRouter);
+app.use("/recruitment/candidate", CandidateRouter);
+app.use("/recruitment/interview", InterviewRouter);
+app.use("/recruitment/offer", OfferLetterRouter);
+app.use("/recruitment/onboarding", OnboardingRouter);
 
+// Attendance
+app.use("/attendance/log", AttendanceLogRouter);
+app.use("/attendance/shift", ShiftRouter);
+app.use("/attendance/weekend", WeekendPolicyRouter);
+app.use("/attendance/request", AttendanceRequestRouter);
+
+// Leave
+app.use("/leave/type", LeaveTypeRouter);
+app.use("/leave/policy", LeavePolicyRouter);
+app.use("/leave/request", LeaveRequestRouter);
+app.use("/leave/balance", LeaveBalanceRouter);
+
+// Payroll
+app.use("/payroll/salary-structure", SalaryStructureRouter);
+app.use("/payroll/process", PayrollProcessRouter);
+app.use("/payroll/payslip", PayslipRouter);
+app.use("/payroll/loan", LoanRouter);
+app.use("/payroll/reimbursement", ReimbursementRouter);
+app.use("/payroll/tax", TaxManagementRouter);
+
+// Performance
+app.use("/performance/goal", GoalRouter);
+app.use("/performance/review", ReviewRouter);
+app.use("/performance/appraisal", AppraisalRouter);
+app.use("/performance/feedback", FeedbackRouter);
+
+// Administration
+app.use("/administration/user", UserRouter);
+app.use("/administration/role", RoleRouter);
+app.use("/administration/audit", AuditLogRouter);
+
+// Settings
+app.use("/settings/system", SystemSettingRouter);
+
+// Dashboard
+app.use("/dashboard", DashboardRouter);
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);

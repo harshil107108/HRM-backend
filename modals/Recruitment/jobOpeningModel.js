@@ -266,7 +266,7 @@ jobOpeningSchema.index(
     { unique: true }
 );
 
-module.exports = mongoose.model(
+module.exports = mongoose.models.JobOpening || mongoose.model(
     "JobOpening",
     jobOpeningSchema
 );
