@@ -128,6 +128,8 @@ module.exports.addEditOnboarding = async (req, res) => {
                 const jo = joId ? await JobOpening.findById(joId) : null;
 
                 if (cand) {
+                    const candidateWasAlreadyHired = cand.stage === "Hired";
+
                     // 1. Mark candidate stage as Hired
                     cand.stage = "Hired";
                     await cand.save();
@@ -206,8 +208,8 @@ module.exports.addEditOnboarding = async (req, res) => {
                         { upsert: true, returnDocument: "after" }
                     );
 
-                    // 3. Update JobOpening filled positions counter and status
-                    if (jo) {
+                    // Count direct onboarding hires, but don't count accepted offers twice.
+                    if (jo && !candidateWasAlreadyHired) {
                         jo.filledPositions = (jo.filledPositions || 0) + 1;
                         if (jo.numberOfPositions && jo.filledPositions >= jo.numberOfPositions) {
                             jo.jobStatus = "FILLED";

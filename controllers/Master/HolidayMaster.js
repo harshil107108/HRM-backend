@@ -1,5 +1,27 @@
 const HolidayMaster = require("../../modals/Master/HolidayMasterModel");
 
+const normalizeHolidayDate = (value) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return new Date(Date.UTC(
+        date.getUTCFullYear(),
+        date.getUTCMonth(),
+        date.getUTCDate()
+    ));
+};
+
+const findHolidayOnDate = (date, excludeId) => {
+    const nextDate = new Date(date);
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+
+    return HolidayMaster.findOne({
+        holidayDate: { $gte: date, $lt: nextDate },
+        ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+    }).select("holidayName");
+};
+
+const isDuplicateKeyError = (error) => error?.code === 11000;
 
 // GET ALL HOLIDAY
 module.exports.getHoliday = async (req, res) => {
@@ -53,6 +75,24 @@ module.exports.getHolidayById = async (req, res) => {
 module.exports.addEditHoliday = async (req, res) => {
     try {
         const { _id, ...holidayData } = req.body;
+        const normalizedDate = normalizeHolidayDate(holidayData.holidayDate);
+
+        if (!normalizedDate) {
+            return res.status(400).json({
+                success: false,
+                message: "Enter a valid holiday date.",
+            });
+        }
+
+        holidayData.holidayDate = normalizedDate;
+
+        const existingHoliday = await findHolidayOnDate(normalizedDate, _id);
+        if (existingHoliday) {
+            return res.status(409).json({
+                success: false,
+                message: `Cannot save this holiday because "${existingHoliday.holidayName}" already exists on this date.`,
+            });
+        }
 
         let holiday;
 
@@ -91,6 +131,13 @@ module.exports.addEditHoliday = async (req, res) => {
         });
 
     } catch (error) {
+        if (isDuplicateKeyError(error)) {
+            return res.status(409).json({
+                success: false,
+                message: "A holiday already exists on this date. Choose another date.",
+            });
+        }
+
         res.status(500).json({
             success: false,
             message: error.message

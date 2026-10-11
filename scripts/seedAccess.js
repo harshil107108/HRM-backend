@@ -55,7 +55,6 @@ const MENUS = [
             ["ATT_LOG", "Attendance Logs", "/attendance/logs"],
             ["ATT_SHIFT", "Shift Management", "/attendance/shifts"],
             ["ATT_HOLIDAY", "Holiday Calendar", "/attendance/holidays"],
-            ["ATT_WEEKEND", "Weekend Policies", "/attendance/weekends"],
             ["ATT_REQUEST", "Attendance Requests", "/attendance/requests"],
         ],
     },
@@ -63,6 +62,7 @@ const MENUS = [
         code: "LEAVE", name: "Leave Management", path: "/leave", icon: "CalendarCheck2",
         children: [
             ["LEAVE_REQUEST", "Leave Requests", "/leave/requests"],
+            ["LEAVE_APPROVAL", "Leave Approvals", "/leave/approvals"],
             ["LEAVE_TYPE", "Leave Types", "/leave/types"],
             ["LEAVE_POLICY", "Leave Policies", "/leave/policies"],
             ["LEAVE_BALANCE", "Leave Balance", "/leave/balance"],
@@ -173,6 +173,7 @@ const ROLES = [
         permissions: buildPermissions((p) => {
             grant(p, ["DASHBOARD", "EMP_DIRECTORY", "ATT_LOG", "ATT_HOLIDAY", "LEAVE_BALANCE"], VIEW);
             grant(p, ["ATT_REQUEST", "LEAVE_REQUEST"], ["view", "add", "edit"]);
+            grant(p, ["LEAVE_APPROVAL"], ["view", "edit"]);
             grant(p, ["REC_CANDIDATE", "REC_INTERVIEW"], ["view", "add", "edit"]);
             grant(p, childCodes("PERFORMANCE"), ["view", "add", "edit"]);
             grant(p, childCodes("REPORTS"), VIEW);
@@ -236,6 +237,15 @@ const run = async () => {
         summary.rolesCreated += res.upsertedCount;
         // Existing roles: still mark the five as system roles.
         await Role.updateOne({ roleCode: role.code }, { $set: { isSystemDefault: true } });
+        if (role.permissions.LEAVE_APPROVAL) {
+            await Role.updateOne(
+                {
+                    roleCode: role.code,
+                    "permissions.LEAVE_APPROVAL": { $exists: false },
+                },
+                { $set: { "permissions.LEAVE_APPROVAL": role.permissions.LEAVE_APPROVAL } },
+            );
+        }
     }
 
     // Super Admin login (raw insert: the employee form's HR fields don't apply)

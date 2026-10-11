@@ -81,25 +81,25 @@ const employeeMasterSchema = new mongoose.Schema(
         companyId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "CompanyMaster",
-            required: true,
+            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
         },
 
         branchId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "BranchMaster",
-            required: true,
+            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
         },
 
         departmentId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "DepartmentMaster",
-            required: true,
+            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
         },
 
         designationId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "DesignationMaster",
-            required: true,
+            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
         },
 
         reportingManager: {
@@ -191,19 +191,19 @@ const employeeMasterSchema = new mongoose.Schema(
         countryId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "CountryMaster",
-            required: true,
+            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
         },
 
         stateId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "StateMaster",
-            required: true,
+            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
         },
 
         cityId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "CityMaster",
-            required: true,
+            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
         },
 
         postalCode: {

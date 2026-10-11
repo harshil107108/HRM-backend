@@ -49,6 +49,30 @@ const ensureDefaultAdminAndRoles = async () => {
                 sampleDoc.isActive = true;
                 sampleDoc.employeeStatus = "ACTIVE";
                 await EmployeeMaster.create(sampleDoc);
+            } else {
+                await EmployeeMaster.create({
+                    employeeId: "ADM001",
+                    firstName: "System",
+                    lastName: "Admin",
+                    gender: "other",
+                    dateOfBirth: new Date("2000-01-01"),
+                    employmentType: "FULL_TIME",
+                    employeeStatus: "ACTIVE",
+                    joiningDate: new Date(),
+                    officialEmail: "admin@orvexa.com",
+                    personalEmail: "admin@orvexa.com",
+                    mobileNumber: "0000000000",
+                    emergencyContactName: "System Admin",
+                    emergencyContactNumber: "0000000000",
+                    postalCode: "N/A",
+                    currentAddress: "System administrator account",
+                    aadhaarNumber: "N/A",
+                    panNumber: "N/A",
+                    username: "admin",
+                    password: hashedPassword,
+                    primaryRole: SUPER_ADMIN_ROLE,
+                    isActive: true,
+                });
             }
         }
     } catch (err) {

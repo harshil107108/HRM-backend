@@ -48,13 +48,13 @@ const OnboardingRouter = require("./routes/Recruitment/onboarding");
 // Attendance
 const AttendanceLogRouter = require("./routes/Attendance/attendanceLog");
 const ShiftRouter = require("./routes/Attendance/shift");
-const WeekendPolicyRouter = require("./routes/Attendance/weekendPolicy");
 const AttendanceRequestRouter = require("./routes/Attendance/attendanceRequest");
 
 // Leave
 const LeaveTypeRouter = require("./routes/Leave/leaveType");
 const LeavePolicyRouter = require("./routes/Leave/leavePolicy");
 const LeaveRequestRouter = require("./routes/Leave/leaveRequest");
+const LeaveApprovalRouter = require("./routes/Leave/leaveApproval");
 const LeaveBalanceRouter = require("./routes/Leave/leaveBalance");
 
 // Payroll
@@ -119,13 +119,13 @@ app.use("/recruitment/onboarding", OnboardingRouter);
 // Attendance
 app.use("/attendance/log", AttendanceLogRouter);
 app.use("/attendance/shift", ShiftRouter);
-app.use("/attendance/weekend", WeekendPolicyRouter);
 app.use("/attendance/request", AttendanceRequestRouter);
 
 // Leave
 app.use("/leave/type", LeaveTypeRouter);
 app.use("/leave/policy", LeavePolicyRouter);
 app.use("/leave/request", LeaveRequestRouter);
+app.use("/leave/approval", LeaveApprovalRouter);
 app.use("/leave/balance", LeaveBalanceRouter);
 
 // Payroll

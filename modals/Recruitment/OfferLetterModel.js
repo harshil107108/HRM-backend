@@ -39,6 +39,10 @@ const offerLetterSchema = new mongoose.Schema(
             enum: ["Draft", "Sent", "Accepted", "Declined", "Expired", "Revoked"],
             default: "Draft",
         },
+        positionCounted: {
+            type: Boolean,
+            default: false,
+        },
         remarks: {
             type: String,
             default: "",

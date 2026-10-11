@@ -10,43 +10,67 @@ const salaryStructureSchema = new mongoose.Schema(
         basicSalary: {
             type: Number,
             required: true,
-            default: 25000,
+            min: 0,
         },
         hra: {
             type: Number,
-            default: 10000,
+            default: 0,
+            min: 0,
+        },
+        da: {
+            type: Number,
+            default: 0,
+            min: 0,
         },
         conveyance: {
             type: Number,
-            default: 3000,
+            default: 0,
+            min: 0,
         },
         specialAllowance: {
             type: Number,
-            default: 5000,
+            default: 0,
+            min: 0,
+        },
+        esi: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+        otherDeductions: {
+            type: Number,
+            default: 0,
+            min: 0,
         },
         medicalAllowance: {
             type: Number,
-            default: 2000,
+            default: 0,
+            min: 0,
         },
         providentFund: {
             type: Number,
-            default: 1800,
+            default: 0,
+            min: 0,
         },
         professionalTax: {
             type: Number,
-            default: 200,
+            default: 0,
+            min: 0,
         },
         grossSalary: {
             type: Number,
-            default: 45000,
+            default: 0,
+            min: 0,
         },
         totalDeductions: {
             type: Number,
-            default: 2000,
+            default: 0,
+            min: 0,
         },
         netSalary: {
             type: Number,
-            default: 43000,
+            default: 0,
+            min: 0,
         },
         isActive: {
             type: Boolean,

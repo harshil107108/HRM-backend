@@ -41,12 +41,12 @@ const API_ACCESS = [
 
     { prefix: "/attendance/log", codes: ["ATT_LOG"], viewAlso: ["REP_ATTENDANCE"] },
     { prefix: "/attendance/shift", codes: ["ATT_SHIFT"] },
-    { prefix: "/attendance/weekend", codes: ["ATT_WEEKEND"] },
     { prefix: "/attendance/request", codes: ["ATT_REQUEST"] },
 
     { prefix: "/leave/type", codes: ["LEAVE_TYPE"] },
     { prefix: "/leave/policy", codes: ["LEAVE_POLICY"] },
-    { prefix: "/leave/request", codes: ["LEAVE_REQUEST"], viewAlso: ["REP_LEAVE"] },
+    { prefix: "/leave/approval", codes: ["LEAVE_APPROVAL"] },
+    { prefix: "/leave/request", codes: ["LEAVE_REQUEST"], viewAlso: ["REP_LEAVE", "LEAVE_APPROVAL"] },
     { prefix: "/leave/balance", codes: ["LEAVE_BALANCE"] },
 
     { prefix: "/payroll/salary-structure", codes: ["PAY_STRUCTURE"] },
@@ -160,10 +160,20 @@ const authorizeRequest = (req, res, next) => {
     if (!user) return res.status(401).json({ success: false, message: "Please sign in to continue." });
     if (user.isSuperAdmin) return next();
 
-    const path = req.path;
+    const path = `${req.baseUrl || ""}${req.path}`;
     const action = resolveAction(req);
 
     if (action === "view" && isLookup(path)) return next();
+
+    // Employees may manage only their own pending leave requests; the Leave
+    // Request controller enforces ownership and pending status on mutations.
+    if (
+        user.roleCode === "EMPLOYEE" &&
+        path.startsWith("/leave/request/") &&
+        ["edit", "delete"].includes(action)
+    ) {
+        return next();
+    }
 
     const rule = findAccessRule(path);
     // Endpoints not tied to a menu only need a valid session.

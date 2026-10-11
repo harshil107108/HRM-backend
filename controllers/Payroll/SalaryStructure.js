@@ -1,5 +1,59 @@
 const SalaryStructure = require("../../modals/Payroll/SalaryStructureModel");
 
+const getAmount = (value, fieldName) => {
+    if (value === undefined || value === null || value === "") {
+        return 0;
+    }
+    if (typeof value !== "number" && typeof value !== "string") {
+        const error = new Error(`${fieldName} must be a valid non-negative amount`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 0) {
+        const error = new Error(`${fieldName} must be a valid non-negative amount`);
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return amount;
+};
+
+const roundCurrency = (amount) => Math.round((amount + Number.EPSILON) * 100) / 100;
+
+const calculateSalaryTotals = (structureData) => {
+    const amounts = {
+        basicSalary: roundCurrency(getAmount(structureData.basicSalary, "Basic salary")),
+        hra: roundCurrency(getAmount(structureData.hra, "HRA")),
+        da: roundCurrency(getAmount(structureData.da, "Dearness allowance")),
+        conveyance: roundCurrency(getAmount(structureData.conveyance, "Conveyance allowance")),
+        specialAllowance: roundCurrency(getAmount(structureData.specialAllowance, "Special allowance")),
+        providentFund: roundCurrency(getAmount(structureData.providentFund, "EPF")),
+        esi: roundCurrency(getAmount(structureData.esi, "ESI")),
+        professionalTax: roundCurrency(getAmount(structureData.professionalTax, "Professional tax")),
+        otherDeductions: roundCurrency(getAmount(structureData.otherDeductions, "Other deductions")),
+    };
+    const { basicSalary: basic, hra, da, conveyance, specialAllowance: special } = amounts;
+    const { providentFund: pf, esi, professionalTax: pt, otherDeductions } = amounts;
+    const grossSalary = roundCurrency(basic + hra + da + conveyance + special);
+    const totalDeductions = roundCurrency(pf + esi + pt + otherDeductions);
+    const netSalary = roundCurrency(grossSalary - totalDeductions);
+
+    if (![grossSalary, totalDeductions, netSalary].every(Number.isFinite)) {
+        const error = new Error("Salary amounts exceed the supported range");
+        error.statusCode = 400;
+        throw error;
+    }
+    if (netSalary < 0) {
+        const error = new Error("Total deductions cannot exceed gross salary");
+        error.statusCode = 400;
+        throw error;
+    }
+
+    return { ...amounts, grossSalary, totalDeductions, netSalary };
+};
+
 module.exports.getSalaryStructures = async (req, res) => {
     try {
         const structures = await SalaryStructure.find({}).sort({ createdAt: -1 });
@@ -43,18 +97,44 @@ module.exports.getSalaryStructureById = async (req, res) => {
 module.exports.addEditSalaryStructure = async (req, res) => {
     try {
         const { _id, ...structureData } = req.body;
+        if (structureData.providentFund === undefined && structureData.epf !== undefined) {
+            structureData.providentFund = structureData.epf;
+        }
+        delete structureData.epf;
 
-        const basic = Number(structureData.basicSalary || 0);
-        const hra = Number(structureData.hra || 0);
-        const conveyance = Number(structureData.conveyance || 0);
-        const special = Number(structureData.specialAllowance || 0);
-        const medical = Number(structureData.medicalAllowance || 0);
-        const pf = Number(structureData.providentFund || 0);
-        const pt = Number(structureData.professionalTax || 0);
+        const existingStructure = _id ? await SalaryStructure.findById(_id) : null;
+        if (_id && !existingStructure) {
+            return res.status(404).json({
+                success: false,
+                message: "Salary structure not found",
+            });
+        }
+        if (!String(structureData.structureName || "").trim()) {
+            if (existingStructure) {
+                structureData.structureName = existingStructure.structureName;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: "Structure name is required",
+                });
+            }
+        }
+        if (structureData.basicSalary === undefined || structureData.basicSalary === null || structureData.basicSalary === "") {
+            if (existingStructure) {
+                structureData.basicSalary = existingStructure.basicSalary;
+            } else {
+                return res.status(400).json({
+                    success: false,
+                    message: "Basic salary is required",
+                });
+            }
+        }
 
-        structureData.grossSalary = basic + hra + conveyance + special + medical;
-        structureData.totalDeductions = pf + pt;
-        structureData.netSalary = structureData.grossSalary - structureData.totalDeductions;
+        const calculationSource = {
+            ...(existingStructure?.toObject() || {}),
+            ...structureData,
+        };
+        Object.assign(structureData, calculateSalaryTotals(calculationSource));
 
         if (_id) {
             const structure = await SalaryStructure.findByIdAndUpdate(_id, structureData, {
@@ -83,7 +163,10 @@ module.exports.addEditSalaryStructure = async (req, res) => {
             data: structure,
         });
     } catch (error) {
-        res.status(500).json({
+        const statusCode =
+            error.statusCode ||
+            (error.name === "ValidationError" || error.name === "CastError" ? 400 : 500);
+        res.status(statusCode).json({
             success: false,
             message: error.message,
         });

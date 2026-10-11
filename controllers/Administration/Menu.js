@@ -76,7 +76,6 @@ const DEFAULT_MENUS = [
         children: [
             { menuName: "Attendance Logs", menuCode: "ATT_LOG", path: "/attendance/logs", sortOrder: 1 },
             { menuName: "Shift Management", menuCode: "ATT_SHIFT", path: "/attendance/shifts", sortOrder: 2 },
-            { menuName: "Weekend Policy", menuCode: "ATT_WEEKEND", path: "/attendance/weekend-policy", sortOrder: 3 },
             { menuName: "Attendance Requests", menuCode: "ATT_REQUEST", path: "/attendance/requests", sortOrder: 4 },
         ],
     },
@@ -87,10 +86,11 @@ const DEFAULT_MENUS = [
         icon: "Calendar",
         sortOrder: 7,
         children: [
-            { menuName: "Leave Types", menuCode: "LEAVE_TYPE", path: "/leave/types", sortOrder: 1 },
-            { menuName: "Leave Policies", menuCode: "LEAVE_POLICY", path: "/leave/policies", sortOrder: 2 },
-            { menuName: "Leave Requests", menuCode: "LEAVE_REQUEST", path: "/leave/requests", sortOrder: 3 },
-            { menuName: "Leave Balances", menuCode: "LEAVE_BALANCE", path: "/leave/balances", sortOrder: 4 },
+            { menuName: "Leave Requests", menuCode: "LEAVE_REQUEST", path: "/leave/requests", sortOrder: 1 },
+            { menuName: "Leave Approvals", menuCode: "LEAVE_APPROVAL", path: "/leave/approvals", sortOrder: 2 },
+            { menuName: "Leave Types", menuCode: "LEAVE_TYPE", path: "/leave/types", sortOrder: 3 },
+            { menuName: "Leave Policies", menuCode: "LEAVE_POLICY", path: "/leave/policies", sortOrder: 4 },
+            { menuName: "Leave Balances", menuCode: "LEAVE_BALANCE", path: "/leave/balances", sortOrder: 5 },
         ],
     },
     {

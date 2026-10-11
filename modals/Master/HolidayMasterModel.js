@@ -19,6 +19,7 @@ const holidayMasterSchema = new mongoose.Schema(
         holidayDate: {
             type: Date,
             required: true,
+            unique: true,
         },
 
         holidayType: {

@@ -1,5 +1,20 @@
 const JobOpeningMaster = require("../../modals/Recruitment/jobOpeningModel");
 
+const getDateOnly = (value) => {
+    if (!value) return null;
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+        ? undefined
+        : date.toISOString().slice(0, 10);
+};
+
+const getTodayDateOnly = () => {
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    return `${today.getFullYear()}-${month}-${day}`;
+};
+
 // =========================================================
 // GET ALL JOB OPENINGS
 // =========================================================
@@ -169,6 +184,15 @@ module.exports.addEditJobOpening = async (req, res) => {
                     message: "Job Opening not found",
                 });
             }
+            if (
+                jobStatus.toUpperCase() === "ACTIVE" &&
+                existingJobOpening.filledPositions >= existingJobOpening.numberOfPositions
+            ) {
+                return res.status(409).json({
+                    success: false,
+                    message: `All ${existingJobOpening.numberOfPositions} position(s) are filled. Increase Number of Positions above ${existingJobOpening.filledPositions} before activating this job opening.`,
+                });
+            }
             existingJobOpening.jobStatus = jobStatus;
             await existingJobOpening.save();
             return res.status(200).json({
@@ -249,6 +273,37 @@ module.exports.addEditJobOpening = async (req, res) => {
             return res.status(400).json({
                 success: false,
                 message: "Job Responsibilities is required",
+            });
+        }
+
+        const publishDateOnly = getDateOnly(publishDate);
+        const closingDateOnly = getDateOnly(closingDate);
+        if (publishDate && !publishDateOnly) {
+            return res.status(400).json({
+                success: false,
+                message: "Publish Date is invalid",
+            });
+        }
+        if (closingDate && !closingDateOnly) {
+            return res.status(400).json({
+                success: false,
+                message: "Closing Date is invalid",
+            });
+        }
+        if (publishDateOnly && publishDateOnly < getTodayDateOnly()) {
+            return res.status(400).json({
+                success: false,
+                message: "Publish Date can't be before today",
+            });
+        }
+        if (
+            publishDateOnly &&
+            closingDateOnly &&
+            closingDateOnly < publishDateOnly
+        ) {
+            return res.status(400).json({
+                success: false,
+                message: "Closing Date can't be before Publish Date",
             });
         }
 
@@ -344,6 +399,23 @@ recruiter: recruiter || null,
                 return res.status(404).json({
                     success: false,
                     message: "Job Opening not found",
+                });
+            }
+
+            if (Number(numberOfPositions) < (existingJobOpening.filledPositions || 0)) {
+                return res.status(409).json({
+                    success: false,
+                    message: `Number of Positions cannot be less than the ${existingJobOpening.filledPositions} already filled position(s).`,
+                });
+            }
+
+            if (
+                jobOpeningData.jobStatus?.toUpperCase() === "ACTIVE" &&
+                Number(numberOfPositions) <= (existingJobOpening.filledPositions || 0)
+            ) {
+                return res.status(409).json({
+                    success: false,
+                    message: `All ${existingJobOpening.filledPositions} position(s) are filled. Increase Number of Positions above ${existingJobOpening.filledPositions} before activating this job opening.`,
                 });
             }
 

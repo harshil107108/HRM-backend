@@ -1,6 +1,7 @@
 const OfferLetter = require("../../modals/Recruitment/OfferLetterModel");
 const Candidate = require("../../modals/Recruitment/CandidateModel");
 const Onboarding = require("../../modals/Recruitment/OnboardingModel");
+const JobOpening = require("../../modals/Recruitment/jobOpeningModel");
 
 module.exports.getOfferLetters = async (req, res) => {
     try {
@@ -114,6 +115,42 @@ module.exports.addEditOfferLetter = async (req, res) => {
                     await Candidate.findByIdAndUpdate(candId, { stage: "Hired" });
                 }
 
+                // Count each accepted offer once so repeated saves cannot overfill the job.
+                const offerToCount = await OfferLetter.findOneAndUpdate(
+                    { _id: offer._id, positionCounted: { $ne: true } },
+                    { $set: { positionCounted: true } },
+                    { new: true },
+                );
+
+                if (offerToCount) {
+                    try {
+                        if (!joId) {
+                            throw new Error("Job Opening is required to count an accepted offer");
+                        }
+
+                        const jobOpening = await JobOpening.findByIdAndUpdate(
+                            joId,
+                            { $inc: { filledPositions: 1 } },
+                            { new: true },
+                        );
+
+                        if (!jobOpening) {
+                            throw new Error("Job Opening not found for accepted offer");
+                        }
+
+                        if (jobOpening.filledPositions >= jobOpening.numberOfPositions) {
+                            await JobOpening.findByIdAndUpdate(joId, {
+                                $set: { jobStatus: "FILLED" },
+                            });
+                        }
+                    } catch (error) {
+                        await OfferLetter.findByIdAndUpdate(offer._id, {
+                            $set: { positionCounted: false },
+                        });
+                        throw error;
+                    }
+                }
+
                 // 2. Atomically create onboarding record if not existing
                 if (candId) {
                     await Onboarding.findOneAndUpdate(
@@ -133,6 +170,7 @@ module.exports.addEditOfferLetter = async (req, res) => {
                 }
             } catch (syncErr) {
                 console.error("Offer Accept sync notice:", syncErr);
+                throw syncErr;
             }
         }
 
