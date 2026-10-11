@@ -7,6 +7,18 @@ const exitManagementSchema = new mongoose.Schema(
             ref: "EmployeeMaster",
             required: true,
         },
+        // Snapshot taken when the exit is Completed: the employee record is
+        // deleted at that point, so the listing falls back to these.
+        employeeName: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+        employeeCode: {
+            type: String,
+            default: "",
+            trim: true,
+        },
         resignationDate: {
             type: Date,
             required: true,
@@ -69,6 +81,22 @@ const exitManagementSchema = new mongoose.Schema(
             default: "",
             trim: true,
         },
+        // Assets handed back during this exit. A snapshot of name/code is kept
+        // so the history still reads correctly if the asset is later edited,
+        // re-assigned or deleted.
+        returnedAssets: [
+            {
+                _id: false,
+                asset: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: "AssetMaster",
+                    required: true,
+                },
+                assetName: { type: String, default: "" },
+                assetCode: { type: String, default: "" },
+                returnedDate: { type: Date, default: Date.now },
+            },
+        ],
     },
     { timestamps: true }
 );

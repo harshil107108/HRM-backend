@@ -7,24 +7,22 @@ const attendanceRequestSchema = new mongoose.Schema(
             ref: "EmployeeMaster",
             required: true,
         },
-        requestDate: {
+        date: {
             type: Date,
             required: true,
         },
-        requestedClockIn: {
+        inTime: {
             type: String,
-            required: true,
             default: "09:00",
         },
-        requestedClockOut: {
+        outTime: {
             type: String,
-            required: true,
             default: "18:00",
         },
         requestType: {
             type: String,
-            enum: ["Missed Punch", "Work From Home", "On Duty", "Half Day Adjustment"],
-            default: "Missed Punch",
+            enum: ["Regularization", "Manual Punch", "Overtime", "On Duty"],
+            default: "Regularization",
         },
         reason: {
             type: String,
@@ -40,7 +38,7 @@ const attendanceRequestSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: "EmployeeMaster",
         },
-        reviewerRemarks: {
+        rejectionReason: {
             type: String,
             default: "",
             trim: true,

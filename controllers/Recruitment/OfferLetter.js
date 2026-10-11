@@ -55,6 +55,29 @@ module.exports.addEditOfferLetter = async (req, res) => {
     try {
         const { _id, ...offerData } = req.body;
 
+        // Enforce requirement: Status can only become Accepted or Declined if previously Sent
+        if (offerData.status === "Accepted" || offerData.status === "Declined") {
+            if (!_id) {
+                return res.status(400).json({
+                    success: false,
+                    message: "A new offer letter must be 'Sent' before it can be Accepted or Declined.",
+                });
+            }
+            const existingOffer = await OfferLetter.findById(_id);
+            if (!existingOffer) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Offer letter not found",
+                });
+            }
+            if (existingOffer.status !== "Sent" && existingOffer.status !== "Accepted" && existingOffer.status !== "Declined") {
+                return res.status(400).json({
+                    success: false,
+                    message: `Offer letter is currently in "${existingOffer.status}". It must be marked as "Sent" before it can be Accepted or Declined.`,
+                });
+            }
+        }
+
         let offer;
         if (_id) {
             offer = await OfferLetter.findByIdAndUpdate(_id, offerData, {
@@ -69,7 +92,15 @@ module.exports.addEditOfferLetter = async (req, res) => {
                 });
             }
         } else {
-            offer = await OfferLetter.create(offerData);
+            if (offerData.candidate) {
+                offer = await OfferLetter.findOneAndUpdate(
+                    { candidate: offerData.candidate },
+                    { $set: offerData },
+                    { upsert: true, returnDocument: "after", runValidators: true }
+                );
+            } else {
+                offer = await OfferLetter.create(offerData);
+            }
         }
 
         // Pipeline Linking: When offer letter is "Accepted"
@@ -83,17 +114,22 @@ module.exports.addEditOfferLetter = async (req, res) => {
                     await Candidate.findByIdAndUpdate(candId, { stage: "Hired" });
                 }
 
-                // 2. Check if an onboarding record already exists for this candidate
-                const existingOnboarding = await Onboarding.findOne({ candidate: candId });
-                if (!existingOnboarding && candId) {
-                    await Onboarding.create({
-                        candidate: candId,
-                        jobOpening: joId,
-                        orientationDate: offer.joiningDate || new Date(Date.now() + 7 * 86400000),
-                        status: "In Progress",
-                        progressPercentage: 20,
-                        notes: "Offer letter accepted by candidate. Automatically moved to Onboarding.",
-                    });
+                // 2. Atomically create onboarding record if not existing
+                if (candId) {
+                    await Onboarding.findOneAndUpdate(
+                        { candidate: candId },
+                        {
+                            $setOnInsert: {
+                                candidate: candId,
+                                jobOpening: joId,
+                                orientationDate: offer.joiningDate || new Date(Date.now() + 7 * 86400000),
+                                status: "In Progress",
+                                progressPercentage: 20,
+                                notes: "Offer letter accepted by candidate. Automatically moved to Onboarding.",
+                            }
+                        },
+                        { upsert: true, returnDocument: "after" }
+                    );
                 }
             } catch (syncErr) {
                 console.error("Offer Accept sync notice:", syncErr);

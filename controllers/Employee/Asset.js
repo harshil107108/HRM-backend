@@ -1,4 +1,5 @@
 const AssetMaster = require("../../modals/Employee/AssetModel");
+const mongoose = require("mongoose");
 
 module.exports.getAsset = async (req, res) => {
     try {
@@ -193,6 +194,44 @@ module.exports.addEditAsset = async (req, res) => {
         }
 
         // =========================================================
+        // STATUS / ASSIGNMENT CONSISTENCY
+        // An asset given to an employee is ASSIGNED; an ASSIGNED asset
+        // must have an employee. Keeps Exit Management's asset list right.
+        // =========================================================
+
+        let resolvedStatus = assetStatus || "AVAILABLE";
+
+        if (assignedEmployee && resolvedStatus === "AVAILABLE") {
+            resolvedStatus = "ASSIGNED";
+        }
+
+        if (resolvedStatus === "ASSIGNED" && !assignedEmployee) {
+            return res.status(400).json({
+                success: false,
+                message: "Select the employee this asset is assigned to",
+            });
+        }
+
+        // End dates can't be before their start dates (enforced here so
+        // every screen that saves an asset follows the same rule).
+        const isBefore = (end, start) =>
+            end && start && new Date(end).getTime() < new Date(start).getTime();
+
+        if (isBefore(expectedReturnDate, assignedDate)) {
+            return res.status(400).json({
+                success: false,
+                message: "Expected Return Date can't be before Assigned Date",
+            });
+        }
+
+        if (isBefore(warrantyEndDate, warrantyStartDate)) {
+            return res.status(400).json({
+                success: false,
+                message: "Warranty End Date can't be before Warranty Start Date",
+            });
+        }
+
+        // =========================================================
         // ASSET DATA
         // =========================================================
 
@@ -241,13 +280,13 @@ module.exports.addEditAsset = async (req, res) => {
                 assignedEmployee || null,
 
             assignedDate:
-                assignedDate || null,
+                assignedDate ||
+                (resolvedStatus === "ASSIGNED" ? new Date() : null),
 
             expectedReturnDate:
                 expectedReturnDate || null,
 
-            assetStatus:
-                assetStatus || "AVAILABLE",
+            assetStatus: resolvedStatus,
 
             description: description || "",
         };
@@ -395,6 +434,48 @@ module.exports.getAssetHelp = async (req, res) => {
         ).sort({
             assetName: 1,
         });
+
+        res.status(200).json({
+            success: true,
+            data: assets,
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: error.message,
+        });
+    }
+};
+// =========================================================
+// ASSETS ASSIGNED TO AN EMPLOYEE (used by Exit Management)
+// =========================================================
+
+module.exports.getAssetsByEmployee = async (req, res) => {
+    try {
+        const { employeeId } = req.body;
+
+        if (!employeeId || !mongoose.Types.ObjectId.isValid(employeeId)) {
+            return res.status(400).json({
+                success: false,
+                message: "A valid Employee ID is required",
+            });
+        }
+
+        const assets = await AssetMaster.find(
+            { assignedEmployee: employeeId, assetStatus: "ASSIGNED" },
+            {
+                _id: 1,
+                assetName: 1,
+                assetCode: 1,
+                assetTag: 1,
+                serialNumber: 1,
+                assetCategory: 1,
+                brand: 1,
+                model: 1,
+                assignedDate: 1,
+                expectedReturnDate: 1,
+            }
+        ).sort({ assetName: 1 });
 
         res.status(200).json({
             success: true,

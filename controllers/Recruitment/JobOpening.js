@@ -160,6 +160,24 @@ module.exports.addEditJobOpening = async (req, res) => {
             remarks,
         } = req.body;
 
+        // Allow partial status update (e.g. from drag & drop or quick status action)
+        if (_id && jobStatus && !jobTitle) {
+            const existingJobOpening = await JobOpeningMaster.findById(_id);
+            if (!existingJobOpening) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Job Opening not found",
+                });
+            }
+            existingJobOpening.jobStatus = jobStatus;
+            await existingJobOpening.save();
+            return res.status(200).json({
+                success: true,
+                message: "Job Opening status updated successfully",
+                data: existingJobOpening,
+            });
+        }
+
         // =========================================================
         // REQUIRED VALIDATION
         // =========================================================
@@ -421,11 +439,12 @@ module.exports.getJobOpeningHelp = async (req, res) => {
     try {
         const jobOpenings =
             await JobOpeningMaster.find(
-                { isActive: true },
+                { isActive: true, jobStatus: "ACTIVE" },
                 {
                     _id: 1,
                     jobTitle: 1,
                     jobOpeningId: 1,
+                    jobStatus: 1,
                 }
             ).sort({ jobTitle: 1 });
 

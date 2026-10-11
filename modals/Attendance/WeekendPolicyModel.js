@@ -17,6 +17,16 @@ const weekendPolicySchema = new mongoose.Schema(
             type: [String],
             default: ["Sunday"],
         },
+        // Fields sent by the frontend Weekend Policy form
+        days: {
+            type: [String],
+            default: ["Sunday"],
+        },
+        status: {
+            type: String,
+            enum: ["Active", "Inactive"],
+            default: "Active",
+        },
         alternateSaturdayRule: {
             type: String,
             enum: ["None", "All Saturdays Off", "2nd & 4th Saturday Off", "1st & 3rd Saturday Off"],

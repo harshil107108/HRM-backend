@@ -6,6 +6,7 @@ const uploadImage = require("../../middlewares/uploadImage");
 router.post( "/getAsset", assetMasterController.getAsset );
 router.post( "/getAssetById", assetMasterController.getAssetById );
 router.post( "/getAssetHelp", assetMasterController.getAssetHelp );
+router.post( "/getAssetsByEmployee", assetMasterController.getAssetsByEmployee );
 
 router.post(
     "/addEditAsset",

@@ -344,15 +344,12 @@ const employeeMasterSchema = new mongoose.Schema(
             required: true,
         },
 
+        // Role code from the Role master (e.g. SUPER_ADMIN, ADMIN, HR, MANAGER, EMPLOYEE).
         primaryRole: {
             type: String,
             required: true,
-            enum: [
-                "EMPLOYEE",
-                "MANAGER",
-                "HR",
-                "ADMIN",
-            ],
+            trim: true,
+            uppercase: true,
         },
 
         userGroup: {
@@ -363,6 +360,12 @@ const employeeMasterSchema = new mongoose.Schema(
         isActive: {
             type: Boolean,
             default: true,
+        },
+
+        candidateId: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: "Candidate",
+            default: null,
         },
 
         permissions: {

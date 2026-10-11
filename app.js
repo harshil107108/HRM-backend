@@ -75,6 +75,10 @@ const FeedbackRouter = require("./routes/Performance/feedback");
 const UserRouter = require("./routes/Administration/user");
 const RoleRouter = require("./routes/Administration/role");
 const AuditLogRouter = require("./routes/Administration/auditLog");
+const MenuRouter = require("./routes/Administration/menu");
+
+// Auth
+const AuthRouter = require("./routes/auth");
 
 // Settings
 const SystemSettingRouter = require("./routes/Settings/systemSetting");
@@ -82,12 +86,17 @@ const SystemSettingRouter = require("./routes/Settings/systemSetting");
 // Dashboard
 const DashboardRouter = require("./routes/Dashboard/dashboard");
 
+// Auth Endpoints
+app.use("/auth", AuthRouter);
+
 //Master
 app.use("/master/country", CountryMasterRouter);
 app.use("/master/city", CityMasterRouter);
 app.use("/master/state", StateMasterRouter);
 app.use("/master/holiday", HolidayMasterRouter);
 app.use("/master/bank", BankMasterRouter);
+app.use("/master/menu", MenuRouter);
+app.use("/master/route", MenuRouter);
 
 //Employee
 app.use("/employee", EmployeeMasterRouter);
@@ -137,6 +146,7 @@ app.use("/performance/feedback", FeedbackRouter);
 app.use("/administration/user", UserRouter);
 app.use("/administration/role", RoleRouter);
 app.use("/administration/audit", AuditLogRouter);
+app.use("/administration/menu", MenuRouter);
 
 // Settings
 app.use("/settings/system", SystemSettingRouter);

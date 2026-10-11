@@ -68,7 +68,18 @@ module.exports.addEditInterview = async (req, res) => {
                 });
             }
         } else {
-            interview = await Interview.create(interviewData);
+            if (interviewData.candidate) {
+                interview = await Interview.findOneAndUpdate(
+                    {
+                        candidate: interviewData.candidate,
+                        ...(interviewData.roundName ? { roundName: interviewData.roundName } : {}),
+                    },
+                    { $set: interviewData },
+                    { upsert: true, returnDocument: "after", runValidators: true }
+                );
+            } else {
+                interview = await Interview.create(interviewData);
+            }
         }
 
         // Pipeline Linking: When interview recommendation is "Hire" or "Strong Hire"
@@ -86,23 +97,28 @@ module.exports.addEditInterview = async (req, res) => {
                     await Candidate.findByIdAndUpdate(candId, { stage: "Offered" });
                 }
 
-                // 2. Check if an offer letter already exists for this candidate
-                const existingOffer = await OfferLetter.findOne({ candidate: candId });
-                if (!existingOffer && candId && joId) {
+                // 2. Atomically create Offer Letter if not existing
+                if (candId && joId) {
                     const jo = await JobOpening.findById(joId);
                     const cand = await Candidate.findById(candId);
                     if (jo) {
-                        await OfferLetter.create({
-                            candidate: candId,
-                            jobOpening: joId,
-                            offeredDesignation: jo.designation,
-                            offeredDepartment: jo.department,
-                            offeredCtc: (cand && cand.expectedSalary) || jo.maximumSalary || 600000,
-                            joiningDate: jo.targetJoiningDate || new Date(Date.now() + 15 * 86400000),
-                            validUntil: new Date(Date.now() + 7 * 86400000),
-                            status: "Draft",
-                            remarks: "Candidate selected from interview process.",
-                        });
+                        await OfferLetter.findOneAndUpdate(
+                            { candidate: candId },
+                            {
+                                $setOnInsert: {
+                                    candidate: candId,
+                                    jobOpening: joId,
+                                    offeredDesignation: jo.designation,
+                                    offeredDepartment: jo.department,
+                                    offeredCtc: (cand && cand.expectedSalary) || jo.maximumSalary || 600000,
+                                    joiningDate: jo.targetJoiningDate || new Date(Date.now() + 15 * 86400000),
+                                    validUntil: new Date(Date.now() + 7 * 86400000),
+                                    status: "Draft",
+                                    remarks: "Candidate selected from interview process.",
+                                }
+                            },
+                            { upsert: true, returnDocument: "after" }
+                        );
                     }
                 }
             } catch (syncErr) {

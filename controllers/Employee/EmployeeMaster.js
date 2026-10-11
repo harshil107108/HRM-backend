@@ -142,6 +142,28 @@ module.exports.addEditEmployee = async (req, res) => {
             });
         }
 
+        // Atomically upsert if employee already exists with this officialEmail or personalEmail (prevent duplicate entries)
+        const emailToCheck = employeeData.officialEmail || employeeData.personalEmail;
+        if (emailToCheck) {
+            if (!employeeData.password) { delete employeeData.password; }
+            const employee = await EmployeeMaster.findOneAndUpdate(
+                {
+                    $or: [
+                        { officialEmail: emailToCheck.toLowerCase() },
+                        { personalEmail: emailToCheck.toLowerCase() },
+                    ],
+                },
+                { $set: employeeData },
+                { upsert: true, returnDocument: "after", runValidators: true }
+            ).select("-password");
+
+            return res.status(200).json({
+                success: true,
+                message: "Employee saved successfully",
+                data: employee,
+            });
+        }
+
         const employee = await EmployeeMaster.create(employeeData);
         const employeeResponse = employee.toObject();
         delete employeeResponse.password;

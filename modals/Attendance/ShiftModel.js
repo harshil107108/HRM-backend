@@ -23,9 +23,17 @@ const shiftSchema = new mongoose.Schema(
             required: true,
             default: "18:00",
         },
-        gracePeriodMinutes: {
+        breakDuration: {
+            type: Number,
+            default: 60,
+        },
+        graceTime: {
             type: Number,
             default: 15,
+        },
+        isNightShift: {
+            type: Boolean,
+            default: false,
         },
         halfDayHours: {
             type: Number,

@@ -5,7 +5,7 @@ module.exports.getAttendanceRequests = async (req, res) => {
         const requests = await AttendanceRequest.find({})
             .populate("employeeId", "employeeId firstName middleName lastName officialEmail")
             .populate("reviewedBy", "employeeId firstName lastName")
-            .sort({ requestDate: -1 });
+            .sort({ date: -1 });
 
         res.status(200).json({
             success: true,

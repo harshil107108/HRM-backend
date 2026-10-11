@@ -53,6 +53,12 @@ const jobOpeningSchema = new mongoose.Schema(
             min: 1,
         },
 
+        filledPositions: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+
         employmentType: {
             type: String,
             required: true,
