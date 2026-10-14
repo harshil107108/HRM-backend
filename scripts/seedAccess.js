@@ -47,6 +47,8 @@ const MENUS = [
             ["EMP_DIRECTORY", "Employee Directory", "/employees/directory"],
             ["EMP_ASSET", "Assets", "/employees/assets"],
             ["EMP_EXIT", "Exit Management", "/employees/exit"],
+            ["TASK_MANAGEMENT", "Task Management", "/employees/task-management"],
+            ["TASK_CREATE", "Task Creation", "/employees/task-creation"],
         ],
     },
     {
@@ -163,7 +165,13 @@ const ROLES = [
             grant(p, ["DASHBOARD"], VIEW);
             grant(p, childCodes("MASTER").filter((c) => c !== "MASTER_MENU"), VIEW);
             grant(p, childCodes("ORGANIZATION"), VIEW);
-            ["EMPLOYEES", "ATTENDANCE", "LEAVE", "PAYROLL", "RECRUITMENT", "PERFORMANCE"].forEach((g) => grant(p, childCodes(g), ALL));
+            ["EMPLOYEES", "ATTENDANCE", "LEAVE", "PAYROLL", "RECRUITMENT", "PERFORMANCE"].forEach((g) =>
+                grant(
+                    p,
+                    childCodes(g).filter((code) => !["TASK_MANAGEMENT", "TASK_CREATE"].includes(code)),
+                    ALL,
+                )
+            );
             grant(p, childCodes("REPORTS"), VIEW);
             grant(p, ["ADMIN_USER"], VIEW);
         }),
@@ -171,7 +179,10 @@ const ROLES = [
     {
         code: "MANAGER", name: "Manager", description: "Manages a team: approvals, hiring and performance.",
         permissions: buildPermissions((p) => {
+            grant(p, ["EMPLOYEES"], VIEW);
             grant(p, ["DASHBOARD", "EMP_DIRECTORY", "ATT_LOG", "ATT_HOLIDAY", "LEAVE_BALANCE"], VIEW);
+            grant(p, ["TASK_MANAGEMENT"], ["view", "add", "edit"]);
+            grant(p, ["TASK_CREATE"], ["view", "add", "edit", "delete"]);
             grant(p, ["ATT_REQUEST", "LEAVE_REQUEST"], ["view", "add", "edit"]);
             grant(p, ["LEAVE_APPROVAL"], ["view", "edit"]);
             grant(p, ["REC_CANDIDATE", "REC_INTERVIEW"], ["view", "add", "edit"]);
@@ -182,7 +193,9 @@ const ROLES = [
     {
         code: "EMPLOYEE", name: "Employee", description: "Self-service: requests, payslips and goals.",
         permissions: buildPermissions((p) => {
+            grant(p, ["EMPLOYEES"], VIEW);
             grant(p, ["DASHBOARD", "ATT_HOLIDAY", "LEAVE_BALANCE", "PAY_PAYSLIP", "PERF_GOAL"], VIEW);
+            grant(p, ["TASK_MANAGEMENT"], ["view", "edit"]);
             grant(p, ["ATT_REQUEST", "LEAVE_REQUEST", "PERF_FEEDBACK"], ["view", "add"]);
         }),
     },
@@ -211,8 +224,12 @@ const run = async () => {
             const r = await Menu.updateOne(
                 { menuCode: code },
                 {
+                    $set: {
+                        parentMenu: parent._id,
+                        path,
+                    },
                     $setOnInsert: {
-                        menuName: name, path, icon: "", parentMenu: parent._id,
+                        menuName: name, icon: "",
                         sortOrder: (childIndex + 1) * 10, isActive: true,
                     },
                 },
@@ -221,6 +238,9 @@ const run = async () => {
             summary.menusCreated += r.upsertedCount;
         }
     }
+
+    // Clean up obsolete duplicate group roots if present
+    await Menu.deleteMany({ menuCode: { $in: ["EMPLOYEE_MANAGEMENT", "EMPLOYEE"] } });
 
     // Roles
     for (const role of ROLES) {
@@ -245,6 +265,22 @@ const run = async () => {
                 },
                 { $set: { "permissions.LEAVE_APPROVAL": role.permissions.LEAVE_APPROVAL } },
             );
+        }
+        for (const menuCode of ["EMPLOYEES", "TASK_MANAGEMENT", "TASK_CREATE"]) {
+            if (role.permissions[menuCode]) {
+                await Role.updateOne(
+                    {
+                        roleCode: role.code,
+                    },
+                    {
+                        $addToSet: {
+                            [`permissions.${menuCode}`]: {
+                                $each: role.permissions[menuCode],
+                            },
+                        },
+                    },
+                );
+            }
         }
     }
 
