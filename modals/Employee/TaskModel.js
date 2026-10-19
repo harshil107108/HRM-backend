@@ -58,6 +58,23 @@ const taskSchema = new mongoose.Schema(
             ref: "EmployeeMaster",
             default: null,
         },
+        startedAt: {
+            type: Date,
+            default: null,
+        },
+        runningStartedAt: {
+            type: Date,
+            default: null,
+        },
+        totalWorkedMs: {
+            type: Number,
+            default: 0,
+            min: 0,
+        },
+        completedAt: {
+            type: Date,
+            default: null,
+        },
     },
     { timestamps: true },
 );

@@ -56,15 +56,34 @@ const getProjectScope = async (user) => {
 
 const parseDate = (value, fieldName) => {
     if (value === undefined || value === null || value === "") return null;
-    if (
-        typeof value !== "string" ||
-        !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-        Number.isNaN(new Date(`${value}T00:00:00.000Z`).getTime()) ||
-        new Date(`${value}T00:00:00.000Z`).toISOString().slice(0, 10) !== value
-    ) {
-        throw Object.assign(new Error(`${fieldName} must be a valid date.`), { statusCode: 400 });
+    if (value instanceof Date) {
+        if (Number.isNaN(value.getTime())) {
+            throw Object.assign(new Error(`${fieldName} must be a valid date.`), { statusCode: 400 });
+        }
+        return value;
     }
-    return new Date(`${value}T00:00:00.000Z`);
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        if (!trimmed) return null;
+
+        // Matches YYYY-MM-DD (including ISO format like YYYY-MM-DDT00:00:00.000Z)
+        const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(trimmed);
+        if (match) {
+            const dateStr = `${match[1]}-${match[2]}-${match[3]}`;
+            const dateObj = new Date(`${dateStr}T00:00:00.000Z`);
+            if (Number.isNaN(dateObj.getTime())) {
+                throw Object.assign(new Error(`${fieldName} must be a valid date.`), { statusCode: 400 });
+            }
+            return dateObj;
+        }
+
+        const dateObj = new Date(trimmed);
+        if (Number.isNaN(dateObj.getTime())) {
+            throw Object.assign(new Error(`${fieldName} must be a valid date.`), { statusCode: 400 });
+        }
+        return dateObj;
+    }
+    throw Object.assign(new Error(`${fieldName} must be a valid date.`), { statusCode: 400 });
 };
 
 const respondWithError = (res, error) =>
@@ -457,9 +476,6 @@ module.exports.createTask = async (req, res) => {
                 });
             }
             parsedDueDate = new Date(`${dateStr}T23:59:59.000Z`);
-        } else if (parsedEstimatedHours && parsedEstimatedHours > 0) {
-            // Calculate target completion date from assigned hours
-            parsedDueDate = new Date(Date.now() + parsedEstimatedHours * 3600 * 1000);
         }
 
         const assigneeFilter = {
@@ -491,13 +507,16 @@ module.exports.createTask = async (req, res) => {
             }
             project = await Project.findOne({
                 _id: projectId,
-                status: { $nin: ["Completed", "Cancelled"] },
+                status: "Active",
                 ...(isAdmin(req.user) ? {} : await getProjectScope(req.user)),
             });
             if (!project) {
+                const projectExists = await Project.exists({ _id: projectId });
                 return res.status(400).json({
                     success: false,
-                    message: "Select an active project within your access scope.",
+                    message: projectExists
+                        ? "Tasks can only be created and assigned to Active projects."
+                        : "Select an active project within your access scope.",
                 });
             }
 
@@ -536,6 +555,10 @@ module.exports.createTask = async (req, res) => {
                 estimatedHours: parsedEstimatedHours,
                 priority,
                 status: "Assigned",
+                startedAt: null,
+                runningStartedAt: null,
+                totalWorkedMs: 0,
+                completedAt: null,
             })),
         );
         const populatedTasks = await Task.find({
@@ -579,15 +602,26 @@ module.exports.deleteTask = async (req, res) => {
         const scope = await getTaskScope(req.user);
         const task = await Task.findOne({ _id, ...scope });
         if (!task) {
+            const exists = await Task.exists({ _id });
             return res.status(404).json({
                 success: false,
-                message: "Task not found or outside your access scope.",
+                message: exists ? "Task is outside your access scope." : "Task not found.",
             });
         }
+
+        // Running tasks cannot be deleted
+        if (task.status === "Running") {
+            return res.status(400).json({
+                success: false,
+                message: "Running tasks cannot be deleted while work is in progress. Complete, stop, or change task status before deleting.",
+            });
+        }
+
         await task.deleteOne();
         res.status(200).json({
             success: true,
             message: "Task deleted successfully.",
+            data: task,
         });
     } catch (error) {
         respondWithError(res, error);
@@ -628,16 +662,9 @@ module.exports.updateTaskStatus = async (req, res) => {
         const scope = await getTaskScope(req.user);
         const filter = { _id, ...scope };
         filter.status = currentStatus;
-        const task = await Task.findOneAndUpdate(
-            filter,
-            { $set: { status, statusUpdatedBy: req.user.employee._id } },
-            { new: true, runValidators: true },
-        )
-            .populate("assignedTo", "employeeId firstName middleName lastName")
-            .populate("createdBy", "employeeId firstName middleName lastName")
-            .populate("statusUpdatedBy", "employeeId firstName middleName lastName");
 
-        if (!task) {
+        const existingTask = await Task.findOne(filter);
+        if (!existingTask) {
             const exists = await Task.exists({ _id });
             return res.status(exists ? 409 : 404).json({
                 success: false,
@@ -647,43 +674,65 @@ module.exports.updateTaskStatus = async (req, res) => {
             });
         }
 
+        const now = new Date();
+        const updateFields = {
+            status,
+            statusUpdatedBy: req.user.employee._id,
+        };
+
+        let totalWorkedMs = Number(existingTask.totalWorkedMs) || 0;
+
+        // If currently in Running status, accumulate elapsed time into totalWorkedMs
+        if (existingTask.status === "Running") {
+            const runStart = existingTask.runningStartedAt || existingTask.startedAt;
+            if (runStart) {
+                const sessionMs = Math.max(0, now.getTime() - new Date(runStart).getTime());
+                totalWorkedMs += sessionMs;
+                updateFields.totalWorkedMs = totalWorkedMs;
+            }
+        }
+
+        if (status === "Running") {
+            // Task enters Running state: real-time timer is ON!
+            if (!existingTask.startedAt) {
+                updateFields.startedAt = now;
+            }
+            updateFields.runningStartedAt = now;
+
+            if (existingTask.status === "Completed") {
+                updateFields.completedAt = null;
+            }
+
+            // If task has estimatedHours, set the target deadline from now based on remaining hours
+            if (existingTask.estimatedHours && existingTask.estimatedHours > 0) {
+                const totalDurationMs = existingTask.estimatedHours * 3600 * 1000;
+                const remainingDurationMs = Math.max(0, totalDurationMs - totalWorkedMs);
+                updateFields.dueDate = new Date(now.getTime() + remainingDurationMs);
+            }
+        } else if (status === "Completed") {
+            updateFields.completedAt = now;
+            updateFields.runningStartedAt = null;
+        } else {
+            // "Assigned" or "Code Review"
+            updateFields.runningStartedAt = null;
+            if (existingTask.status === "Completed") {
+                updateFields.completedAt = null;
+            }
+        }
+
+        const task = await Task.findByIdAndUpdate(
+            existingTask._id,
+            { $set: updateFields },
+            { new: true, runValidators: true },
+        )
+            .populate("projectId", "projectName clientName deadline")
+            .populate("assignedTo", "employeeId firstName middleName lastName")
+            .populate("createdBy", "employeeId firstName middleName lastName")
+            .populate("statusUpdatedBy", "employeeId firstName middleName lastName");
+
         res.status(200).json({
             success: true,
             message: "Task status updated successfully.",
-            data: task,
-        });
-    } catch (error) {
-        respondWithError(res, error);
-    }
-};
-
-module.exports.deleteTask = async (req, res) => {
-    try {
-        if (!canCreateTasks(req.user)) {
-            return res.status(403).json({
-                success: false,
-                message: "Only Admins and Managers can delete tasks.",
-            });
-        }
-        const { _id } = req.body || {};
-        if (!mongoose.Types.ObjectId.isValid(_id)) {
-            return res.status(400).json({
-                success: false,
-                message: "A valid task ID is required.",
-            });
-        }
-        const scope = await getTaskScope(req.user);
-        const task = await Task.findOneAndDelete({ _id, ...scope });
-        if (!task) {
-            const exists = await Task.exists({ _id });
-            return res.status(404).json({
-                success: false,
-                message: exists ? "Task is outside your access scope." : "Task not found.",
-            });
-        }
-        res.status(200).json({
-            success: true,
-            message: "Task deleted successfully.",
             data: task,
         });
     } catch (error) {
