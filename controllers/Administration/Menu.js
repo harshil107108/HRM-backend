@@ -51,6 +51,8 @@ const DEFAULT_MENUS = [
             { menuName: "Employee Directory", menuCode: "EMP_DIRECTORY", path: "/employee/directory", sortOrder: 1 },
             { menuName: "Asset Management", menuCode: "EMP_ASSET", path: "/employee/assets", sortOrder: 2 },
             { menuName: "Exit Management", menuCode: "EMP_EXIT", path: "/employee/exit", sortOrder: 3 },
+            { menuName: "Day Report", menuCode: "EMP_DAY_REPORT", path: "/employee/day-report", sortOrder: 4 },
+            { menuName: "Day Report Unlock", menuCode: "EMP_DAY_REPORT_UNLOCK", path: "/employee/day-report-unlock", sortOrder: 5 },
         ],
     },
     {

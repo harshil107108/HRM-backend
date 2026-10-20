@@ -31,6 +31,7 @@ const API_ACCESS = [
 
     { prefix: "/employee/asset", codes: ["EMP_ASSET"] },
     { prefix: "/employee/exit", codes: ["EMP_EXIT"] },
+    { prefix: "/employee/day-report", codes: ["EMP_DAY_REPORT", "EMP_DAY_REPORT_UNLOCK", "EMP_DIRECTORY"] },
     { prefix: "/employee", codes: ["EMP_DIRECTORY"], viewAlso: ["REP_EMPLOYEE"] },
     { prefix: "/tasks/getProjects", codes: ["TASK_CREATE"] },
     { prefix: "/tasks/addEditProject", codes: ["TASK_CREATE"] },

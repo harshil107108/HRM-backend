@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 const EmployeeMaster = require("../../modals/Employee/EmployeeMasterModel");
 const Task = require("../../modals/Employee/TaskModel");
 const Project = require("../../modals/Employee/ProjectModel");
+const DayReport = require("../../modals/Employee/DayReportModel");
 
 const TASK_STATUSES = ["Assigned", "Running", "Code Review", "Completed"];
 const CREATOR_ROLES = new Set(["ADMIN", "MANAGER", "SUPER_ADMIN"]);
@@ -682,17 +683,94 @@ module.exports.updateTaskStatus = async (req, res) => {
 
         let totalWorkedMs = Number(existingTask.totalWorkedMs) || 0;
 
-        // If currently in Running status, accumulate elapsed time into totalWorkedMs
+        // If currently in Running status, accumulate elapsed time into totalWorkedMs and log to Day Report
         if (existingTask.status === "Running") {
             const runStart = existingTask.runningStartedAt || existingTask.startedAt;
             if (runStart) {
                 const sessionMs = Math.max(0, now.getTime() - new Date(runStart).getTime());
                 totalWorkedMs += sessionMs;
                 updateFields.totalWorkedMs = totalWorkedMs;
+
+                // Automatically log work session into Employee Day Report for today
+                try {
+                    const sessionMinutes = Math.max(1, Math.round(sessionMs / 60000));
+                    const assignedEmployeeId = existingTask.assignedTo || req.user.employee._id;
+                    const dateStr = now.toISOString().split("T")[0];
+
+                    const formatTime12 = (d) => {
+                        const dt = new Date(d);
+                        return dt.toLocaleTimeString("en-US", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            hour12: true,
+                        });
+                    };
+
+                    let dayReport = await DayReport.findOne({
+                        employeeId: assignedEmployeeId,
+                        date: dateStr,
+                    });
+
+                    if (!dayReport) {
+                        dayReport = new DayReport({
+                            employeeId: assignedEmployeeId,
+                            date: dateStr,
+                            activities: [],
+                            totalWorkMinutes: 0,
+                            totalBreakMinutes: 0,
+                        });
+                    }
+
+                    let projectName = "General Task";
+                    if (existingTask.projectId) {
+                        const proj = await Project.findById(existingTask.projectId).select("projectName").lean();
+                        if (proj?.projectName) projectName = proj.projectName;
+                    }
+
+                    dayReport.activities.push({
+                        type: "Task",
+                        title: existingTask.title || "Task Execution",
+                        category: projectName,
+                        startTime: formatTime12(runStart),
+                        endTime: formatTime12(now),
+                        durationMinutes: sessionMinutes,
+                        remarks: (req.body.remarks || "").trim(),
+                        status: "Completed",
+                    });
+
+                    let totalWork = 0;
+                    let totalBreak = 0;
+                    for (const act of dayReport.activities) {
+                        const m = Number(act.durationMinutes) || 0;
+                        if (act.type === "Break") totalBreak += m;
+                        else totalWork += m;
+                    }
+                    dayReport.totalWorkMinutes = totalWork;
+                    dayReport.totalBreakMinutes = totalBreak;
+
+                    await dayReport.save();
+                } catch (dayReportErr) {
+                    console.error("Failed to auto-log task session to DayReport:", dayReportErr);
+                }
             }
         }
 
         if (status === "Running") {
+            // Prevent running tasks if today's Day Report is already locked
+            const todayStr = now.toISOString().split("T")[0];
+            const assignedEmpId = existingTask.assignedTo || req.user.employee._id;
+            const lockedDayReport = await DayReport.findOne({
+                employeeId: assignedEmpId,
+                date: todayStr,
+                status: "Locked",
+            });
+            if (lockedDayReport) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Today's Day Report is locked. You cannot perform or run tasks.",
+                });
+            }
+
             // Task enters Running state: real-time timer is ON!
             if (!existingTask.startedAt) {
                 updateFields.startedAt = now;

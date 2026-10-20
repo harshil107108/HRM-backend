@@ -39,6 +39,7 @@ const JobOpeningRouter = require("./routes/Recruitment/jobOpening");
 const AssetMasterRouter = require("./routes/Employee/asset");
 const ExitRouter = require("./routes/Employee/exit");
 const TaskRouter = require("./routes/Employee/task");
+const DayReportRouter = require("./routes/Employee/dayReport");
 
 // Recruitment
 const CandidateRouter = require("./routes/Recruitment/candidate");
@@ -103,6 +104,7 @@ app.use("/master/route", MenuRouter);
 app.use("/employee", EmployeeMasterRouter);
 app.use("/employee/asset", AssetMasterRouter);
 app.use("/employee/exit", ExitRouter);
+app.use("/employee/day-report", DayReportRouter);
 app.use("/tasks", TaskRouter);
 
 //Organization

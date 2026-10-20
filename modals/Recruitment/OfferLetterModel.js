@@ -48,6 +48,26 @@ const offerLetterSchema = new mongoose.Schema(
             default: "",
             trim: true,
         },
+        emailSent: {
+            type: Boolean,
+            default: false,
+        },
+        emailSentAt: {
+            type: Date,
+        },
+        emailSentTo: {
+            type: String,
+            default: "",
+            trim: true,
+        },
+        emailMessageId: {
+            type: String,
+            default: "",
+        },
+        emailError: {
+            type: String,
+            default: "",
+        },
     },
     { timestamps: true }
 );
