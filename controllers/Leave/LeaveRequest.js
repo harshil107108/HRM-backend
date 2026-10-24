@@ -117,10 +117,14 @@ module.exports.addEditLeaveRequest = async (req, res) => {
 
 module.exports.updateLeaveRequestStatus = async (req, res) => {
     try {
-        if (req.user.roleCode === "EMPLOYEE") {
+        const allowedRoles = ["ADMIN", "SUPER_ADMIN", "HR", "MANAGER"];
+        const userRole = String(req.user?.roleCode || "").toUpperCase();
+        const isAuthorizedRole = req.user?.isSuperAdmin || allowedRoles.includes(userRole);
+
+        if (!isAuthorizedRole) {
             return res.status(403).json({
                 success: false,
-                message: "Employees cannot approve or reject leave requests",
+                message: "Employees are not permitted to approve or reject leave requests. Only Admin, HR, or Manager have approval authority.",
             });
         }
 
@@ -144,16 +148,48 @@ module.exports.updateLeaveRequestStatus = async (req, res) => {
             });
         }
 
-        const request = await LeaveRequest.findOneAndUpdate(
-            { _id, status: "Pending" },
+        // 1. Fetch existing request to verify existence and pending status
+        const existingRequest = await LeaveRequest.findById(_id);
+        if (!existingRequest) {
+            return res.status(404).json({
+                success: false,
+                message: "Leave request not found",
+            });
+        }
+
+        if (existingRequest.status !== "Pending") {
+            return res.status(409).json({
+                success: false,
+                message: "Only pending leave requests can be approved or rejected",
+            });
+        }
+
+        // 2. Prevent self-approval (the applicant cannot approve or reject their own leave)
+        const currentEmpId = req.user?.employee?._id;
+        const applicantEmpId = existingRequest.employeeId;
+
+        if (
+            currentEmpId &&
+            applicantEmpId &&
+            currentEmpId.toString() === applicantEmpId.toString()
+        ) {
+            return res.status(403).json({
+                success: false,
+                message: "You cannot approve or reject your own leave request. It must be reviewed by another manager, HR, or administrator.",
+            });
+        }
+
+        // 3. Update the status with approver audit trail
+        const request = await LeaveRequest.findByIdAndUpdate(
+            _id,
             {
                 $set: {
                     status,
-                    approverId: req.user.employee._id,
+                    approverId: currentEmpId,
                     approverRemarks: approverRemarks.trim(),
                 },
             },
-            { new: true, runValidators: true },
+            { new: true, runValidators: true }
         )
             .populate("employeeId", "employeeId firstName middleName lastName officialEmail")
             .populate("leaveType", "typeName typeCode isPaid")

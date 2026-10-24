@@ -1,5 +1,6 @@
 const DayReport = require("../../modals/Employee/DayReportModel");
 const EmployeeMaster = require("../../modals/Employee/EmployeeMasterModel");
+const AttendanceLog = require("../../modals/Attendance/AttendanceLogModel");
 
 /**
  * Helper to compute work and break minutes from activities
@@ -353,19 +354,84 @@ exports.toggleLock = async (req, res) => {
     }
 
     report.status = status;
+    let punchOutResult = null;
+
     if (status === "Draft") {
       report.unlockedBySupervisor = true;
       report.unlockedAt = new Date();
       report.unlockedBy = req.user?._id;
     } else if (status === "Locked") {
       report.unlockedBySupervisor = false;
+
+      // =========================================================================
+      // AUTO PUNCH-OUT ON DAY REPORT LOCK
+      // When an employee locks their day report, automatically mark clock-out time
+      // =========================================================================
+      try {
+        const now = new Date();
+        const pad = (n) => String(n).padStart(2, "0");
+        const currentClockOut = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+        const reportDateOnly = String(date).slice(0, 10);
+        const dayStart = new Date(`${reportDateOnly}T00:00:00.000Z`);
+        const dayEnd = new Date(dayStart);
+        dayEnd.setUTCDate(dayEnd.getUTCDate() + 1);
+
+        let attendance = await AttendanceLog.findOne({
+          employeeId,
+          date: { $gte: dayStart, $lt: dayEnd },
+        });
+
+        if (attendance) {
+          attendance.clockOut = currentClockOut;
+          if (attendance.clockIn) {
+            const [inH, inM] = attendance.clockIn.split(":").map(Number);
+            const [outH, outM] = currentClockOut.split(":").map(Number);
+            const inMins = inH * 60 + inM;
+            const outMins = outH * 60 + outM;
+            const workedMins = Math.max(0, (outMins - inMins + 24 * 60) % (24 * 60));
+            attendance.totalHours = Number((workedMins / 60).toFixed(1));
+          }
+          if (!attendance.remarks || !attendance.remarks.includes("Punch-out")) {
+            attendance.remarks = attendance.remarks
+              ? `${attendance.remarks} | Punch-out upon Day Report Lock`
+              : "Punch-out upon Day Report Lock";
+          }
+          await attendance.save();
+          punchOutResult = {
+            clockOut: attendance.clockOut,
+            clockIn: attendance.clockIn,
+            totalHours: attendance.totalHours,
+          };
+        } else {
+          attendance = await AttendanceLog.create({
+            employeeId,
+            date: dayStart,
+            clockIn: "09:00",
+            clockOut: currentClockOut,
+            totalHours: 8.0,
+            status: "Present",
+            source: "Web",
+            remarks: "Auto-generated attendance upon Day Report Lock",
+          });
+          punchOutResult = {
+            clockOut: attendance.clockOut,
+            clockIn: attendance.clockIn,
+            totalHours: attendance.totalHours,
+          };
+        }
+      } catch (attErr) {
+        console.error("Failed to auto-mark punch-out on DayReport lock:", attErr);
+      }
     }
     await report.save();
 
     return res.status(200).json({
       success: true,
-      message: `Day report for ${date} has been ${status.toLowerCase()} successfully`,
+      message: `Day report for ${date} has been ${status.toLowerCase()} successfully${punchOutResult ? `. Punch-out recorded at ${punchOutResult.clockOut}.` : ""
+        }`,
       data: report,
+      punchOut: punchOutResult,
     });
   } catch (error) {
     console.error("Error in toggleLock:", error);
