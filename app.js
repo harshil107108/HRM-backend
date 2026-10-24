@@ -50,6 +50,7 @@ const OnboardingRouter = require("./routes/Recruitment/onboarding");
 // Attendance
 const AttendanceLogRouter = require("./routes/Attendance/attendanceLog");
 const ShiftRouter = require("./routes/Attendance/shift");
+const WeekendPolicyRouter = require("./routes/Attendance/weekendPolicy");
 const AttendanceRequestRouter = require("./routes/Attendance/attendanceRequest");
 
 // Leave
@@ -123,6 +124,7 @@ app.use("/recruitment/onboarding", OnboardingRouter);
 // Attendance
 app.use("/attendance/log", AttendanceLogRouter);
 app.use("/attendance/shift", ShiftRouter);
+app.use("/attendance/weekend", WeekendPolicyRouter);
 app.use("/attendance/request", AttendanceRequestRouter);
 
 // Leave
