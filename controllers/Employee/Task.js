@@ -562,6 +562,38 @@ module.exports.createTask = async (req, res) => {
                 completedAt: null,
             })),
         );
+
+        // Dispatch in-app notification to each assigned employee
+        try {
+            const Notification = require("../../modals/Notification/NotificationModel");
+            const senderName = [
+                req.user?.employee?.firstName,
+                req.user?.employee?.lastName,
+            ].filter(Boolean).join(" ") || "Your Manager";
+
+            const notifs = tasks.map((t) => ({
+                recipient: t.assignedTo,
+                sender: req.user?.employee?._id || null,
+                type: "TASK_ASSIGNED",
+                title: "New Task Assigned",
+                message: `${senderName} assigned you a task: "${t.title}"`,
+                metadata: {
+                    taskId: t._id,
+                    projectId: t.projectId,
+                    priority: t.priority,
+                    dueDate: t.dueDate,
+                },
+                isRead: false,
+                createdAt: new Date(),
+            }));
+
+            if (notifs.length > 0) {
+                await Notification.insertMany(notifs);
+            }
+        } catch (notifErr) {
+            console.warn("[TaskController] Failed to dispatch task notifications:", notifErr.message);
+        }
+
         const populatedTasks = await Task.find({
             _id: { $in: tasks.map((task) => task._id) },
         })

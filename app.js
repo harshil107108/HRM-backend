@@ -89,6 +89,9 @@ const SystemSettingRouter = require("./routes/Settings/systemSetting");
 // Dashboard
 const DashboardRouter = require("./routes/Dashboard/dashboard");
 
+// Notifications
+const NotificationRouter = require("./routes/Notification/notification");
+
 // Auth Endpoints
 app.use("/auth", AuthRouter);
 
@@ -160,6 +163,19 @@ app.use("/settings/system", SystemSettingRouter);
 // Dashboard
 app.use("/dashboard", DashboardRouter);
 
-app.listen(port, () => {
+const ChatRouter = require("./routes/Chat/chat");
+const http = require("http");
+const { setupChatSocket } = require("./socket/chatSocket");
+
+// Notifications
+app.use("/notifications", NotificationRouter);
+
+// Internal Chat
+app.use("/chat", ChatRouter);
+
+const server = http.createServer(app);
+setupChatSocket(server);
+
+server.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });

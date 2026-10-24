@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const EmployeeMaster = require("../../modals/Employee/EmployeeMasterModel");
 const ExitManagement = require("../../modals/Employee/ExitManagementModel");
 const CompanyMaster = require("../../modals/Organization/CompanyMasterModel");
@@ -198,7 +199,7 @@ module.exports.getDashboardStats = async (req, res) => {
         ] = await Promise.all([
             EmployeeMaster.find({})
                 .select(
-                    "employeeId firstName middleName lastName profileImage officialEmail personalEmail departmentId designationId employeeStatus isActive joiningDate dateOfBirth createdAt"
+                    "employeeId firstName middleName lastName profileImage officialEmail personalEmail departmentId designationId employeeStatus isActive joiningDate dateOfBirth createdAt currentStatus"
                 )
                 .sort({ createdAt: -1 })
                 .lean(),
@@ -431,6 +432,7 @@ module.exports.getDashboardStats = async (req, res) => {
         // ---------------------------------------------------------
         const statusLabel = (e) => {
             if (onLeaveTodayIds.has(String(e._id))) return "On Leave";
+            if (e.currentStatus && e.currentStatus !== "Active") return e.currentStatus;
             switch (e.employeeStatus) {
                 case "NOTICE":
                     return "Notice Period";
@@ -583,5 +585,30 @@ module.exports.getDashboardStats = async (req, res) => {
             success: false,
             message: error.message,
         });
+    }
+};
+
+module.exports.updateActivityStatus = async (req, res) => {
+    try {
+        const { employeeId, email, employeeCode, status } = req.body;
+        const newStatus = status ? status.trim() : "Active";
+
+        let query = null;
+        if (employeeId && mongoose.Types.ObjectId.isValid(employeeId)) {
+            query = { _id: employeeId };
+        } else if (employeeCode) {
+            query = { employeeId: employeeCode };
+        } else if (email) {
+            query = { $or: [{ officialEmail: email.toLowerCase() }, { personalEmail: email.toLowerCase() }] };
+        }
+
+        if (query) {
+            await EmployeeMaster.findOneAndUpdate(query, { currentStatus: newStatus });
+        }
+
+        return res.status(200).json({ success: true, status: newStatus });
+    } catch (error) {
+        console.error("Error in updateActivityStatus:", error);
+        return res.status(500).json({ success: false, message: error.message });
     }
 };

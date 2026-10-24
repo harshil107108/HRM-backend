@@ -130,6 +130,12 @@ const employeeMasterSchema = new mongoose.Schema(
             default: "ACTIVE",
         },
 
+        currentStatus: {
+            type: String,
+            default: "Active",
+            trim: true,
+        },
+
         joiningDate: {
             type: Date,
             required: true,
