@@ -86,26 +86,35 @@ const ensureDefaultAdminAndRoles = async () => {
 };
 
 // Everything the frontend needs after sign-in / on reload.
-const sessionPayload = ({ employee, role, roleCode, isSuperAdmin, permissions, menus }) => ({
-    user: {
-        _id: String(employee._id),
-        employeeCode: employee.employeeId || "",
-        username: employee.username,
-        name: [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "),
-        email: employee.officialEmail || "",
-        profileImage: employee.profileImage || "",
-        roleCode,
-        roleName: role.roleName,
-        isSuperAdmin,
-    },
-    permissions,
-    menus: buildMenuTree(menus, permissions),
-    // Every active menu's route (permitted or not), so the app can tell
-    // "no permission" apart from "not a menu page".
-    routes: menus
-        .filter((m) => m.isActive && m.path)
-        .map((m) => ({ menuCode: m.menuCode, path: m.path, parent: m.parentMenu ? String(m.parentMenu) : null })),
-});
+const sessionPayload = ({ employee, role, roleCode, isSuperAdmin, permissions, menus }) => {
+    const designationName = employee.designationId?.designationname || "";
+    const designationCode = employee.designationId?.designationcode || "";
+    const departmentName = employee.departmentId?.departmentname || "";
+
+    return {
+        user: {
+            _id: String(employee._id),
+            employeeCode: employee.employeeId || "",
+            username: employee.username,
+            name: [employee.firstName, employee.middleName, employee.lastName].filter(Boolean).join(" "),
+            email: employee.officialEmail || "",
+            profileImage: employee.profileImage || "",
+            roleCode,
+            roleName: role.roleName,
+            designationName,
+            designationCode,
+            departmentName,
+            isSuperAdmin,
+        },
+        permissions,
+        menus: buildMenuTree(menus, permissions),
+        // Every active menu's route (permitted or not), so the app can tell
+        // "no permission" apart from "not a menu page".
+        routes: menus
+            .filter((m) => m.isActive && m.path)
+            .map((m) => ({ menuCode: m.menuCode, path: m.path, parent: m.parentMenu ? String(m.parentMenu) : null })),
+    };
+};
 
 module.exports.login = async (req, res) => {
     try {

@@ -19,10 +19,13 @@ app.use(cors({
 }));
 app.use("/uploads",express.static(path.join(__dirname, "uploads")));
 
-mongoose.connect('mongodb://127.0.0.1:27017/HRM').then(() => {
-    console.log("DB Connected")
-}).catch(() => {
-    console.log("Errror in Connecting DB")
+const mongoURI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/HRM';
+
+mongoose.connect(mongoURI).then(() => {
+    const isLive = !mongoURI.includes("127.0.0.1") && !mongoURI.includes("localhost");
+    console.log(`DB Connected successfully [${isLive ? 'LIVE / ATLAS' : 'LOCAL'}]`);
+}).catch((err) => {
+    console.error("Error in Connecting DB:", err.message);
 });
 
 const CountryMasterRouter = require("./routes/Master/countryMaster");

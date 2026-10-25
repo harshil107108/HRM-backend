@@ -62,6 +62,7 @@ const API_ACCESS = [
     { prefix: "/payroll/salary-structure", codes: ["PAY_STRUCTURE"] },
     { prefix: "/payroll/process", codes: ["PAY_PROCESS"] },
     { prefix: "/payroll/payslip", codes: ["PAY_PAYSLIP"], viewAlso: ["REP_PAYROLL"] },
+    { prefix: "/payroll/calendar", codes: ["PAY_CALENDAR", "PAY_PAYSLIP"], viewAlso: ["REP_PAYROLL"] },
     { prefix: "/payroll/loan", codes: ["PAY_LOAN"] },
     { prefix: "/payroll/reimbursement", codes: ["PAY_REIMBURSEMENT"] },
     { prefix: "/payroll/tax", codes: ["PAY_TAX"] },
@@ -91,6 +92,9 @@ const LOOKUP_PATHS = new Set([
     "/leave/type/getLeaveTypes",
     "/master/holiday/getHoliday",
     "/settings/system/getSettingsByCategory",
+    "/payroll/payslip/getSalarySettings",
+    "/payroll/payslip/getEmployeeLeaveDeduction",
+    "/payroll/payslip/getPayrollCalendarData",
 ]);
 
 const isLookup = (path) => LOOKUP_PATHS.has(path) || /help$/i.test(path.split("/").pop() || "");
@@ -116,19 +120,44 @@ const resolveAction = (req) => {
 // =========================================================
 const loadAccessForEmployee = async (employeeId) => {
     const employee = await EmployeeMaster.findById(employeeId)
-        .select("employeeId firstName middleName lastName username officialEmail profileImage primaryRole isActive employeeStatus")
+        .select("employeeId firstName middleName lastName username officialEmail profileImage primaryRole designationId departmentId isActive employeeStatus")
+        .populate("designationId", "designationname designationcode")
+        .populate("departmentId", "departmentname departmentcode")
         .lean();
     if (!employee) return { error: "Your account no longer exists." };
     if (employee.isActive === false || employee.employeeStatus === "INACTIVE") {
         return { error: "Your account is inactive. Contact your administrator." };
     }
 
-    const roleCode = String(employee.primaryRole || "").toUpperCase();
-    const [role, menus] = await Promise.all([
+    let roleCode = String(employee.primaryRole || "").trim().toUpperCase();
+    const desName = String(employee.designationId?.designationname || "").toUpperCase();
+    const desCode = String(employee.designationId?.designationcode || "").toUpperCase();
+
+    // If roleCode is default "EMPLOYEE" or empty, smartly infer from Designation
+    if (!roleCode || roleCode === "EMPLOYEE") {
+        if (desName.includes("HR") || desName.includes("HUMAN RESOURCE") || desCode.includes("HR")) {
+            roleCode = "HR";
+        } else if (desName.includes("MANAGER") || desName.includes("DIRECTOR") || desCode.includes("MGR")) {
+            roleCode = "MANAGER";
+        }
+    }
+
+    let [role, menus] = await Promise.all([
         Role.findOne({ roleCode }).lean(),
         Menu.find({}).lean(),
     ]);
-    if (!role) return { error: "Your role is not configured. Contact your administrator." };
+
+    // Fallback: If role not found by roleCode, try case-insensitive or default to EMPLOYEE
+    if (!role) {
+        role = await Role.findOne({ roleCode: { $regex: new RegExp(`^${roleCode}$`, "i") } }).lean();
+    }
+    if (!role) {
+        role = await Role.findOne({ roleCode: "EMPLOYEE" }).lean();
+        roleCode = "EMPLOYEE";
+    }
+    if (!role) {
+        return { error: "Your role is not configured. Contact your administrator." };
+    }
 
     const isSuperAdmin = roleCode === SUPER_ADMIN_ROLE;
     const permissions = effectivePermissions(menus, role.permissions, isSuperAdmin);

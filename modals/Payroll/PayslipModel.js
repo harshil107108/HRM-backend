@@ -28,6 +28,18 @@ const payslipSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        da: {
+            type: Number,
+            default: 0,
+        },
+        ctc: {
+            type: Number,
+            default: 0,
+        },
+        conveyance: {
+            type: Number,
+            default: 0,
+        },
         specialAllowance: {
             type: Number,
             default: 0,
@@ -40,11 +52,27 @@ const payslipSchema = new mongoose.Schema(
             type: Number,
             default: 0,
         },
+        epf: {
+            type: Number,
+            default: 0,
+        },
+        esi: {
+            type: Number,
+            default: 0,
+        },
         professionalTax: {
             type: Number,
             default: 0,
         },
         tds: {
+            type: Number,
+            default: 0,
+        },
+        leaveDeduction: {
+            type: Number,
+            default: 0,
+        },
+        unpaidLeaveDays: {
             type: Number,
             default: 0,
         },
@@ -60,14 +88,32 @@ const payslipSchema = new mongoose.Schema(
             type: Number,
             required: true,
         },
+        netPay: {
+            type: Number,
+            default: function () {
+                return this.netSalary;
+            },
+        },
+        paymentMode: {
+            type: String,
+            default: "Bank Transfer",
+        },
+        paymentDate: {
+            type: Date,
+            default: Date.now,
+        },
         generatedDate: {
             type: Date,
             default: Date.now,
         },
         status: {
             type: String,
-            enum: ["Generated", "Sent", "Viewed"],
-            default: "Generated",
+            enum: ["Generated", "Sent", "Viewed", "Paid", "Unpaid", "On Hold"],
+            default: "Paid",
+        },
+        paymentStatus: {
+            type: String,
+            default: "Paid",
         },
     },
     { timestamps: true }

@@ -16,7 +16,7 @@ const mongoose = require("mongoose");
 const Menu = require("../modals/Administration/MenuModel");
 const Role = require("../modals/Administration/RoleModel");
 
-const MONGO_URL = "mongodb://127.0.0.1:27017/HRM";
+const MONGO_URL = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/HRM";
 
 // Mirrors the current sidebar (src/utils/Routes.js) + Menu Master.
 const MENUS = [
@@ -49,6 +49,8 @@ const MENUS = [
             ["EMP_EXIT", "Exit Management", "/employees/exit"],
             ["TASK_MANAGEMENT", "Task Management", "/employees/task-management"],
             ["TASK_CREATE", "Task Creation", "/employees/task-creation"],
+            ["EMP_DAY_REPORT", "Day Report", "/employees/day-report"],
+            ["EMP_DAY_REPORT_UNLOCK", "Day Report Unlock", "/employees/day-report-unlock"],
         ],
     },
     {
@@ -76,6 +78,7 @@ const MENUS = [
             ["PAY_STRUCTURE", "Salary Structure", "/payroll/salary-structure"],
             ["PAY_PROCESS", "Payroll Processing", "/payroll/process"],
             ["PAY_PAYSLIP", "Payslips", "/payroll/payslips"],
+            ["PAY_CALENDAR", "Payroll Calendar", "/payroll/calendar"],
             ["PAY_LOAN", "Loans", "/payroll/loans"],
             ["PAY_REIMBURSEMENT", "Reimbursements", "/payroll/reimbursements"],
             ["PAY_TAX", "Tax Management", "/payroll/taxes"],
@@ -183,6 +186,7 @@ const ROLES = [
             grant(p, ["DASHBOARD", "EMP_DIRECTORY", "ATT_LOG", "ATT_HOLIDAY", "LEAVE_BALANCE"], VIEW);
             grant(p, ["TASK_MANAGEMENT"], ["view", "add", "edit"]);
             grant(p, ["TASK_CREATE"], ["view", "add", "edit", "delete"]);
+            grant(p, ["EMP_DAY_REPORT", "EMP_DAY_REPORT_UNLOCK"], ["view", "add", "edit"]);
             grant(p, ["ATT_REQUEST", "LEAVE_REQUEST"], ["view", "add", "edit"]);
             grant(p, ["LEAVE_APPROVAL"], ["view", "edit"]);
             grant(p, ["REC_CANDIDATE", "REC_INTERVIEW"], ["view", "add", "edit"]);
@@ -194,8 +198,9 @@ const ROLES = [
         code: "EMPLOYEE", name: "Employee", description: "Self-service: requests, payslips and goals.",
         permissions: buildPermissions((p) => {
             grant(p, ["EMPLOYEES"], VIEW);
-            grant(p, ["DASHBOARD", "ATT_HOLIDAY", "LEAVE_BALANCE", "PAY_PAYSLIP", "PERF_GOAL"], VIEW);
+            grant(p, ["DASHBOARD", "ATT_HOLIDAY", "LEAVE_BALANCE", "PAY_PAYSLIP", "PAY_CALENDAR", "PERF_GOAL"], VIEW);
             grant(p, ["TASK_MANAGEMENT"], ["view", "edit"]);
+            grant(p, ["EMP_DAY_REPORT"], ["view", "add", "edit"]);
             grant(p, ["ATT_REQUEST", "LEAVE_REQUEST", "PERF_FEEDBACK"], ["view", "add"]);
         }),
     },
@@ -266,7 +271,7 @@ const run = async () => {
                 { $set: { "permissions.LEAVE_APPROVAL": role.permissions.LEAVE_APPROVAL } },
             );
         }
-        for (const menuCode of ["EMPLOYEES", "TASK_MANAGEMENT", "TASK_CREATE"]) {
+        for (const menuCode of ["EMPLOYEES", "TASK_MANAGEMENT", "TASK_CREATE", "EMP_DAY_REPORT", "EMP_DAY_REPORT_UNLOCK"]) {
             if (role.permissions[menuCode]) {
                 await Role.updateOne(
                     {

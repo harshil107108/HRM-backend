@@ -40,10 +40,10 @@ module.exports.getEmployeeById = async (req, res) => {
 
         const employee = await EmployeeMaster.findById(_id)
             .select("-password")
-            .populate("companyId", "companyName")
-            .populate("branchId", "branchName")
-            .populate("departmentId", "departmentName")
-            .populate("designationId", "designationName")
+            .populate("companyId", "companyName companyCode")
+            .populate("branchId", "branchname branchcode")
+            .populate("departmentId", "departmentname departmentcode")
+            .populate("designationId", "designationname designationcode")
             .populate("reportingManager", "employeeId firstName lastName")
             .populate("countryId", "countryName")
             .populate("stateId", "stateName")
@@ -239,7 +239,9 @@ module.exports.getEmployeeHelp = async (req, res) => {
                 employeeId: 1,
                 firstName: 1,
                 middleName: 1,
-                lastName: 1
+                lastName: 1,
+                ctc: 1,
+                basicSalary: 1,
             }
         ).sort({
             firstName: 1
@@ -248,6 +250,8 @@ module.exports.getEmployeeHelp = async (req, res) => {
         const data = employees.map((employee) => ({
             _id: employee._id,
             employeeId: employee.employeeId,
+            ctc: employee.ctc || 0,
+            basicSalary: employee.basicSalary || 0,
             employeeName: [
                 employee.firstName,
                 employee.middleName,
