@@ -51,6 +51,7 @@ const API_ACCESS = [
 
     { prefix: "/attendance/log", codes: ["ATT_LOG"], viewAlso: ["REP_ATTENDANCE"] },
     { prefix: "/attendance/shift", codes: ["ATT_SHIFT"] },
+    { prefix: "/attendance/weekend", codes: ["ATT_WEEKEND"] },
     { prefix: "/attendance/request", codes: ["ATT_REQUEST"] },
 
     { prefix: "/leave/type", codes: ["LEAVE_TYPE"] },
@@ -95,6 +96,7 @@ const LOOKUP_PATHS = new Set([
     "/payroll/payslip/getSalarySettings",
     "/payroll/payslip/getEmployeeLeaveDeduction",
     "/payroll/payslip/getPayrollCalendarData",
+    "/leave/balance/getLeaveBalances",
 ]);
 
 const isLookup = (path) => LOOKUP_PATHS.has(path) || /help$/i.test(path.split("/").pop() || "");

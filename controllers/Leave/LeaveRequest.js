@@ -102,6 +102,23 @@ module.exports.addEditLeaveRequest = async (req, res) => {
 
         requestData.status = "Pending";
         const request = await LeaveRequest.create(requestData);
+
+        // Update pendingDays on LeaveBalance
+        try {
+            const reqYear = new Date(request.startDate).getFullYear();
+            let balance = await LeaveBalance.findOne({
+                employeeId: request.employeeId,
+                leaveType: request.leaveType,
+                year: reqYear,
+            });
+            if (balance) {
+                balance.pendingDays = (balance.pendingDays || 0) + (Number(request.totalDays) || 0);
+                await balance.save();
+            }
+        } catch (err) {
+            console.error("Failed to update pendingDays on balance:", err);
+        }
+
         res.status(201).json({
             success: true,
             message: "Leave request submitted successfully",
@@ -205,6 +222,42 @@ module.exports.updateLeaveRequestStatus = async (req, res) => {
             });
         }
 
+        // Deduct from LeaveBalance when Approved, or update pending on Reject
+        const requestYear = new Date(request.startDate).getFullYear();
+        const LeaveTypeModel = require("../../modals/Leave/LeaveTypeModel");
+        const empId = request.employeeId?._id || request.employeeId;
+        const ltId = request.leaveType?._id || request.leaveType;
+
+        let balance = await LeaveBalance.findOne({
+            employeeId: empId,
+            leaveType: ltId,
+            year: requestYear,
+        });
+
+        if (!balance) {
+            const leaveTypeDoc = await LeaveTypeModel.findById(ltId);
+            balance = new LeaveBalance({
+                employeeId: empId,
+                leaveType: ltId,
+                year: requestYear,
+                totalAllocated: leaveTypeDoc?.daysAllowedPerYear || 12,
+                usedDays: 0,
+                pendingDays: 0,
+                balanceDays: leaveTypeDoc?.daysAllowedPerYear || 12,
+            });
+        }
+
+        if (status === "Approved") {
+            balance.usedDays = (balance.usedDays || 0) + (Number(request.totalDays) || 0);
+            balance.pendingDays = Math.max(0, (balance.pendingDays || 0) - (Number(request.totalDays) || 0));
+            balance.balanceDays = Math.max(0, balance.totalAllocated - balance.usedDays);
+            await balance.save();
+        } else if (status === "Rejected") {
+            balance.pendingDays = Math.max(0, (balance.pendingDays || 0) - (Number(request.totalDays) || 0));
+            balance.balanceDays = Math.max(0, balance.totalAllocated - balance.usedDays);
+            await balance.save();
+        }
+
         return res.status(200).json({
             success: true,
             message: `Leave request ${status.toLowerCase()} successfully`,
@@ -220,11 +273,13 @@ module.exports.updateLeaveRequestStatus = async (req, res) => {
 
 module.exports.deleteLeaveRequestById = async (req, res) => {
     try {
-        const { _id } = req.body;
+        const userRole = String(req.user?.roleCode || "").toUpperCase();
+        const isAdmin = Boolean(req.user?.isSuperAdmin || ["SUPER_ADMIN", "ADMIN", "HR"].includes(userRole));
+
         const request = await LeaveRequest.findOneAndDelete({
             _id,
             status: "Pending",
-            ...(req.user.roleCode === "EMPLOYEE"
+            ...(!isAdmin && req.user?.employee?._id
                 ? { employeeId: req.user.employee._id }
                 : {}),
         });
@@ -237,6 +292,22 @@ module.exports.deleteLeaveRequestById = async (req, res) => {
                     ? "Only pending leave requests can be deleted"
                     : "Leave request not found",
             });
+        }
+
+        // Adjust pendingDays on LeaveBalance
+        try {
+            const reqYear = new Date(request.startDate).getFullYear();
+            let balance = await LeaveBalance.findOne({
+                employeeId: request.employeeId,
+                leaveType: request.leaveType,
+                year: reqYear,
+            });
+            if (balance) {
+                balance.pendingDays = Math.max(0, (balance.pendingDays || 0) - (Number(request.totalDays) || 0));
+                await balance.save();
+            }
+        } catch (err) {
+            console.error("Failed to decrement pendingDays on delete:", err);
         }
 
         res.status(200).json({

@@ -80,7 +80,9 @@ const DEFAULT_MENUS = [
         children: [
             { menuName: "Attendance Logs", menuCode: "ATT_LOG", path: "/attendance/logs", sortOrder: 1 },
             { menuName: "Shift Management", menuCode: "ATT_SHIFT", path: "/attendance/shifts", sortOrder: 2 },
-            { menuName: "Attendance Requests", menuCode: "ATT_REQUEST", path: "/attendance/requests", sortOrder: 4 },
+            { menuName: "Weekend Policy", menuCode: "ATT_WEEKEND", path: "/attendance/weekend-policy", sortOrder: 3 },
+            { menuName: "Holiday Calendar", menuCode: "ATT_HOLIDAY", path: "/attendance/holidays", sortOrder: 4 },
+            { menuName: "Attendance Requests", menuCode: "ATT_REQUEST", path: "/attendance/requests", sortOrder: 5 },
         ],
     },
     {
@@ -104,12 +106,11 @@ const DEFAULT_MENUS = [
         icon: "DollarSign",
         sortOrder: 8,
         children: [
-            { menuName: "Salary Structures", menuCode: "PAY_STRUCTURE", path: "/payroll/structures", sortOrder: 1 },
-            { menuName: "Payroll Processing", menuCode: "PAY_PROCESS", path: "/payroll/process", sortOrder: 2 },
-            { menuName: "Payslips", menuCode: "PAY_PAYSLIP", path: "/payroll/payslips", sortOrder: 3 },
-            { menuName: "Loans & Advances", menuCode: "PAY_LOAN", path: "/payroll/loans", sortOrder: 4 },
-            { menuName: "Reimbursements", menuCode: "PAY_REIMBURSEMENT", path: "/payroll/reimbursements", sortOrder: 5 },
-            { menuName: "Tax Management", menuCode: "PAY_TAX", path: "/payroll/tax", sortOrder: 6 },
+            { menuName: "Payroll Processing", menuCode: "PAY_PROCESS", path: "/payroll/process", sortOrder: 1 },
+            { menuName: "Payslips", menuCode: "PAY_PAYSLIP", path: "/payroll/payslips", sortOrder: 2 },
+            { menuName: "Loans & Advances", menuCode: "PAY_LOAN", path: "/payroll/loans", sortOrder: 3 },
+            { menuName: "Reimbursements", menuCode: "PAY_REIMBURSEMENT", path: "/payroll/reimbursements", sortOrder: 4 },
+            { menuName: "Tax Management", menuCode: "PAY_TAX", path: "/payroll/tax", sortOrder: 5 },
         ],
     },
     {
@@ -155,30 +156,63 @@ const DEFAULT_MENUS = [
 
 const seedMenusIfEmpty = async () => {
     const count = await Menu.countDocuments();
-    if (count > 0) return false;
+    if (count === 0) {
+        for (const group of DEFAULT_MENUS) {
+            const parent = await Menu.create({
+                menuName: group.menuName,
+                menuCode: group.menuCode,
+                path: group.path,
+                icon: group.icon,
+                parentMenu: null,
+                sortOrder: group.sortOrder,
+                isActive: true,
+            });
 
-    for (const group of DEFAULT_MENUS) {
-        const parent = await Menu.create({
-            menuName: group.menuName,
-            menuCode: group.menuCode,
-            path: group.path,
-            icon: group.icon,
-            parentMenu: null,
-            sortOrder: group.sortOrder,
-            isActive: true,
-        });
-
-        if (group.children?.length) {
-            for (const child of group.children) {
-                await Menu.create({
-                    menuName: child.menuName,
-                    menuCode: child.menuCode,
-                    path: child.path,
-                    icon: "",
-                    parentMenu: parent._id,
-                    sortOrder: child.sortOrder,
+            if (group.children?.length) {
+                for (const child of group.children) {
+                    await Menu.create({
+                        menuName: child.menuName,
+                        menuCode: child.menuCode,
+                        path: child.path,
+                        icon: "",
+                        parentMenu: parent._id,
+                        sortOrder: child.sortOrder,
+                        isActive: true,
+                    });
+                }
+            }
+        }
+    } else {
+        // Sync any missing default menus into existing database
+        for (const group of DEFAULT_MENUS) {
+            let parent = await Menu.findOne({ menuCode: group.menuCode });
+            if (!parent) {
+                parent = await Menu.create({
+                    menuName: group.menuName,
+                    menuCode: group.menuCode,
+                    path: group.path,
+                    icon: group.icon,
+                    parentMenu: null,
+                    sortOrder: group.sortOrder,
                     isActive: true,
                 });
+            }
+
+            if (group.children?.length) {
+                for (const child of group.children) {
+                    const exists = await Menu.findOne({ menuCode: child.menuCode });
+                    if (!exists) {
+                        await Menu.create({
+                            menuName: child.menuName,
+                            menuCode: child.menuCode,
+                            path: child.path,
+                            icon: "",
+                            parentMenu: parent._id,
+                            sortOrder: child.sortOrder,
+                            isActive: true,
+                        });
+                    }
+                }
             }
         }
     }
