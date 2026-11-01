@@ -55,6 +55,10 @@ module.exports.getLeaveRequestById = async (req, res) => {
     }
 };
 
+const { calculateLeaveWorkingDays } = require("../../utils/leaveUtils");
+const WeekendPolicy = require("../../modals/Attendance/WeekendPolicyModel");
+const HolidayMaster = require("../../modals/Master/HolidayMasterModel");
+
 module.exports.addEditLeaveRequest = async (req, res) => {
     try {
         const { _id, ...requestData } = req.body;
@@ -68,6 +72,58 @@ module.exports.addEditLeaveRequest = async (req, res) => {
         if (isEmployee) {
             requestData.employeeId = req.user.employee._id;
         }
+
+        const startDateStr = String(requestData.startDate || "").slice(0, 10);
+        const endDateStr = requestData.isHalfDay ? startDateStr : String(requestData.endDate || requestData.startDate || "").slice(0, 10);
+
+        if (!startDateStr || !endDateStr) {
+            return res.status(400).json({
+                success: false,
+                message: "Start date and End date are required",
+            });
+        }
+
+        if (endDateStr < startDateStr) {
+            return res.status(400).json({
+                success: false,
+                message: "End date cannot be before the start date",
+            });
+        }
+
+        // Fetch active weekend policy and official holidays within the period
+        const [activeWeekendPolicy, holidays] = await Promise.all([
+            WeekendPolicy.findOne({
+                $or: [{ status: "Active" }, { isActive: true }],
+            }).lean(),
+            HolidayMaster.find({
+                holidayDate: {
+                    $gte: new Date(`${startDateStr}T00:00:00.000Z`),
+                    $lte: new Date(`${endDateStr}T23:59:59.999Z`),
+                },
+            }).lean(),
+        ]);
+
+        const calc = calculateLeaveWorkingDays({
+            startDate: startDateStr,
+            endDate: endDateStr,
+            isHalfDay: Boolean(requestData.isHalfDay),
+            weekendPolicy: activeWeekendPolicy,
+            holidays: holidays || [],
+        });
+
+        // EDGE CASE: If all selected dates fall on weekends / holidays, reject!
+        if (calc.isAllNonWorking || calc.totalWorkingDays === 0) {
+            const reasons = calc.excludedDays.map((d) => `${d.date} (${d.reason})`).join(", ");
+            return res.status(400).json({
+                success: false,
+                message: `The selected leave date(s) fall entirely on non-working days (${reasons}). Leave cannot be requested for weekends or official holidays.`,
+            });
+        }
+
+        // Accurately assign the verified working days (excluding weekends & holidays)
+        requestData.totalDays = calc.totalWorkingDays;
+        requestData.startDate = new Date(`${startDateStr}T00:00:00.000Z`);
+        requestData.endDate = new Date(`${endDateStr}T00:00:00.000Z`);
 
         if (_id) {
             const request = await LeaveRequest.findOneAndUpdate(
