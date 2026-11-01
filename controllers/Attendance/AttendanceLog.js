@@ -1,5 +1,14 @@
 const AttendanceLog = require("../../modals/Attendance/AttendanceLogModel");
+const EmployeeMaster = require("../../modals/Employee/EmployeeMasterModel");
 const mongoose = require("mongoose");
+const {
+    parsePaging,
+    buildPagination,
+    containsRegex,
+    dateSearchRange,
+    buildFilterConditions,
+    buildSort,
+} = require("../../utils/pagination");
 
 const getDateOnly = (value) => {
     if (!value) return null;
@@ -27,8 +36,74 @@ const formatClockTime = (value) => {
     return `${hour24 % 12 || 12}:${match[2]} ${hour24 < 12 ? "AM" : "PM"}`;
 };
 
+// Employees whose "First Last (EMP-ID)" text contains every typed word.
+const findEmployeeIdsByText = async (text) => {
+    const words = String(text).trim().split(/\s+/).filter(Boolean);
+    if (!words.length) return null;
+    return EmployeeMaster.find({
+        $and: words.map((word) => {
+            const rx = containsRegex(word);
+            return { $or: [{ firstName: rx }, { lastName: rx }, { employeeId: rx }] };
+        }),
+    }).distinct("_id");
+};
+
+const LOG_FILTER_FIELDS = {
+    date: { type: "date", path: "date" },
+    clockIn: { type: "text", path: "clockIn" },
+    clockOut: { type: "text", path: "clockOut" },
+    totalHours: { type: "number", path: "totalHours" },
+    status: { type: "text", path: "status" },
+    source: { type: "text", path: "source" },
+    remarks: { type: "text", path: "remarks" },
+};
+
+// Paged variant of the listing: search + column filters run on the server so
+// they cover every record, not just the pages loaded so far.
+const getPagedAttendanceLogs = async (req, res, paging) => {
+    const { search, filters } = req.body;
+    const and = buildFilterConditions(filters, LOG_FILTER_FIELDS);
+
+    if (filters?.employeeName) {
+        const ids = await findEmployeeIdsByText(filters.employeeName);
+        if (ids) and.push({ employeeId: { $in: ids } });
+    }
+
+    if (search && String(search).trim()) {
+        const rx = containsRegex(search);
+        const ids = await findEmployeeIdsByText(search);
+        const anyColumn = [
+            { status: rx }, { source: rx }, { remarks: rx }, { clockIn: rx }, { clockOut: rx },
+        ];
+        if (ids?.length) anyColumn.push({ employeeId: { $in: ids } });
+        const dateRange = dateSearchRange(search);
+        if (dateRange) anyColumn.push({ date: dateRange });
+        and.push({ $or: anyColumn });
+    }
+
+    const query = and.length ? { $and: and } : {};
+    const [logs, total] = await Promise.all([
+        AttendanceLog.find(query)
+            .populate("employeeId", "employeeId firstName middleName lastName officialEmail departmentId branchId")
+            .sort(buildSort(req.body.sort, { date: "date", clockIn: "clockIn", status: "status" }, { date: -1 }))
+            .skip(paging.skip)
+            .limit(paging.limit)
+            .lean(),
+        AttendanceLog.countDocuments(query),
+    ]);
+
+    res.status(200).json({
+        success: true,
+        data: logs,
+        pagination: buildPagination(paging, total),
+    });
+};
+
 module.exports.getAttendanceLogs = async (req, res) => {
     try {
+        const paging = parsePaging(req.body);
+        if (paging) return await getPagedAttendanceLogs(req, res, paging);
+
         const logs = await AttendanceLog.find({})
             .populate("employeeId", "employeeId firstName middleName lastName officialEmail departmentId branchId")
             .sort({ date: -1 });

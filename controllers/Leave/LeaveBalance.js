@@ -2,12 +2,200 @@ const LeaveBalance = require("../../modals/Leave/LeaveBalanceModel");
 const EmployeeMaster = require("../../modals/Employee/EmployeeMasterModel");
 const LeaveType = require("../../modals/Leave/LeaveTypeModel");
 const LeaveRequest = require("../../modals/Leave/LeaveRequestModel");
+const {
+    parsePaging,
+    buildPagination,
+    buildRowFilter,
+} = require("../../utils/pagination");
 
 const hasAdminRights = (user) => {
     if (!user) return false;
     if (user.isSuperAdmin) return true;
     const roleCode = String(user.roleCode || user.role?.roleCode || "").toUpperCase();
     return ["SUPER_ADMIN", "ADMIN", "HR"].includes(roleCode);
+};
+
+// One pass over (employee x leave type) pairs, done with 2 reads and at most
+// 2 writes. It used to run 3+ sequential queries per pair - for 26 employees
+// and 3 leave types that was 200+ round trips on every page load.
+// Rules are unchanged: used = approved days, pending = pending days (requests
+// starting in `year`), balance = allocated - used, missing rows are created.
+const syncLeaveBalances = async (employees, leaveTypes, year) => {
+    if (!employees.length || !leaveTypes.length) return;
+
+    const employeeIds = employees.map((e) => e._id);
+    const leaveTypeIds = leaveTypes.map((t) => t._id);
+
+    const [totals, balances] = await Promise.all([
+        LeaveRequest.aggregate([
+            {
+                $match: {
+                    employeeId: { $in: employeeIds },
+                    leaveType: { $in: leaveTypeIds },
+                    status: { $in: ["Approved", "Pending"] },
+                    startDate: {
+                        $gte: new Date(`${year}-01-01T00:00:00.000Z`),
+                        $lte: new Date(`${year}-12-31T23:59:59.999Z`),
+                    },
+                },
+            },
+            {
+                $group: {
+                    _id: { employee: "$employeeId", type: "$leaveType", status: "$status" },
+                    days: { $sum: "$totalDays" },
+                },
+            },
+        ]),
+        LeaveBalance.find({
+            year,
+            employeeId: { $in: employeeIds },
+            leaveType: { $in: leaveTypeIds },
+        }).lean(),
+    ]);
+
+    const pairKey = (employee, type) => `${employee}|${type}`;
+    const usedByPair = new Map();
+    const pendingByPair = new Map();
+    for (const row of totals) {
+        const target = row._id.status === "Approved" ? usedByPair : pendingByPair;
+        target.set(pairKey(row._id.employee, row._id.type), Number(row.days) || 0);
+    }
+    const balanceByPair = new Map();
+    for (const balance of balances) {
+        const key = pairKey(balance.employeeId, balance.leaveType);
+        if (!balanceByPair.has(key)) balanceByPair.set(key, balance);
+    }
+
+    const toCreate = [];
+    const toUpdate = [];
+    for (const employee of employees) {
+        for (const leaveType of leaveTypes) {
+            const key = pairKey(employee._id, leaveType._id);
+            const usedDays = usedByPair.get(key) || 0;
+            const pendingDays = pendingByPair.get(key) || 0;
+            const balance = balanceByPair.get(key);
+
+            const totalAllocated = balance
+                ? Number(balance.totalAllocated)
+                : (Number(leaveType.daysAllowedPerYear) || 12);
+            // Leave is deducted when approved: balanceDays = totalAllocated - usedDays
+            const balanceDays = Math.max(0, totalAllocated - usedDays);
+
+            if (!balance) {
+                toCreate.push({
+                    employeeId: employee._id,
+                    leaveType: leaveType._id,
+                    year,
+                    totalAllocated,
+                    usedDays,
+                    pendingDays,
+                    balanceDays,
+                });
+            } else if (
+                balance.usedDays !== usedDays ||
+                balance.pendingDays !== pendingDays ||
+                balance.balanceDays !== balanceDays
+            ) {
+                toUpdate.push({
+                    updateOne: {
+                        filter: { _id: balance._id },
+                        update: { $set: { usedDays, pendingDays, balanceDays } },
+                    },
+                });
+            }
+        }
+    }
+
+    if (toCreate.length) await LeaveBalance.insertMany(toCreate);
+    if (toUpdate.length) await LeaveBalance.bulkWrite(toUpdate);
+};
+
+const BALANCE_FILTER_FIELDS = {
+    employeeName: { type: "text" },
+    leaveTypeName: { type: "text" },
+    year: { type: "number" },
+    credited: { type: "number" },
+    used: { type: "number" },
+    pending: { type: "number" },
+    remaining: { type: "number" },
+};
+
+const SEARCHABLE_BALANCE_FIELDS = [
+    "employeeName", "leaveTypeName", "year", "credited", "used", "pending", "remaining",
+];
+
+// Paged listing.
+//
+// Employee and leave-type names live in other collections and the list is
+// ordered by them. Doing that join inside MongoDB ($lookup per balance row)
+// measured 1.0-1.6 s for 6,000 balances; three flat reads joined in Node take
+// ~60 ms, so the join, search, filters and sort happen here and only the
+// requested page leaves the server. Cost per request grows linearly with the
+// number of balance rows (fine for tens of thousands; beyond that, store the
+// display names on the balance document and move this back into the query).
+const sendPagedBalances = async (req, res, paging, scope) => {
+    const base = { year: scope.year };
+    if (scope.employeeId) base.employeeId = scope.employeeId;
+    if (scope.leaveType) base.leaveType = scope.leaveType;
+
+    let balances, employees, leaveTypes;
+    try {
+        [balances, employees, leaveTypes] = await Promise.all([
+            LeaveBalance.find(base).lean(),
+            EmployeeMaster.find({}).select("employeeId firstName middleName lastName officialEmail").lean(),
+            LeaveType.find({}).select("typeName typeCode isPaid colorCode daysAllowedPerYear").lean(),
+        ]);
+    } catch (error) {
+        // An id that isn't a valid ObjectId can't match anything.
+        if (error?.name === "CastError") balances = [];
+        else throw error;
+    }
+
+    const employeeById = new Map(employees?.map((e) => [String(e._id), e]));
+    const leaveTypeById = new Map(leaveTypes?.map((t) => [String(t._id), t]));
+
+    // Same shape and values the unpaged endpoint returns.
+    let rows = balances.map((b) => {
+        const employee = employeeById.get(String(b.employeeId)) || null;
+        const leaveType = leaveTypeById.get(String(b.leaveType)) || null;
+        return {
+            ...b,
+            employeeId: employee,
+            leaveType,
+            credited: b.totalAllocated,
+            used: b.usedDays,
+            pending: b.pendingDays,
+            remaining: b.balanceDays,
+            employeeName: employee
+                ? `${employee.firstName || ""} ${employee.lastName || ""} (${employee.employeeId || ""})`
+                : "N/A",
+            leaveTypeName: leaveType?.typeName || leaveType?.typeCode || "N/A",
+        };
+    });
+
+    const search = String(req.body.search || "").trim().toLowerCase();
+    if (search) {
+        rows = rows.filter((row) =>
+            SEARCHABLE_BALANCE_FIELDS.some((field) => String(row[field] ?? "").toLowerCase().includes(search)),
+        );
+    }
+    const matchesFilters = buildRowFilter(req.body.filters, BALANCE_FILTER_FIELDS);
+    if (matchesFilters) rows = rows.filter(matchesFilters);
+
+    // `_id` last: a total order keeps offset paging stable between requests.
+    rows.sort(
+        (a, b) =>
+            a.employeeName.localeCompare(b.employeeName) ||
+            a.leaveTypeName.localeCompare(b.leaveTypeName) ||
+            String(a._id).localeCompare(String(b._id)),
+    );
+
+    res.status(200).json({
+        success: true,
+        isAdmin: scope.isAdmin,
+        data: rows.slice(paging.skip, paging.skip + paging.limit),
+        pagination: buildPagination(paging, rows.length),
+    });
 };
 
 module.exports.getLeaveBalances = async (req, res) => {
@@ -38,60 +226,24 @@ module.exports.getLeaveBalances = async (req, res) => {
             LeaveType.find({ isActive: { $ne: false } }).lean(),
         ]);
 
-        // Auto-sync: Ensure every relevant employee and active leave type has a LeaveBalance document for the year
-        for (const emp of employees) {
-            for (const lt of leaveTypes) {
-                // Calculate used days strictly from APPROVED requests for this year
-                const approvedRequests = await LeaveRequest.find({
-                    employeeId: emp._id,
-                    leaveType: lt._id,
-                    status: "Approved",
-                    startDate: {
-                        $gte: new Date(`${currentYear}-01-01T00:00:00.000Z`),
-                        $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
-                    },
-                }).lean();
-                const usedDays = approvedRequests.reduce((sum, r) => sum + (Number(r.totalDays) || 0), 0);
+        // Auto-sync: Ensure every relevant employee and active leave type has a LeaveBalance document for the year.
+        // When paging, only a plain first page re-syncs (initial load / reload): later pages
+        // and search / filter requests read what that pass already wrote.
+        const paging = parsePaging(req.body);
+        const isNarrowedQuery =
+            String(req.body?.search || "").trim() !== "" ||
+            Object.values(req.body?.filters || {}).some((v) => v !== "" && v !== null && v !== undefined);
+        if (!paging || (paging.page === 1 && !isNarrowedQuery)) {
+            await syncLeaveBalances(employees, leaveTypes, currentYear);
+        }
 
-                // Calculate pending days from PENDING requests for this year
-                const pendingRequests = await LeaveRequest.find({
-                    employeeId: emp._id,
-                    leaveType: lt._id,
-                    status: "Pending",
-                    startDate: {
-                        $gte: new Date(`${currentYear}-01-01T00:00:00.000Z`),
-                        $lte: new Date(`${currentYear}-12-31T23:59:59.999Z`),
-                    },
-                }).lean();
-                const pendingDays = pendingRequests.reduce((sum, r) => sum + (Number(r.totalDays) || 0), 0);
-
-                let balance = await LeaveBalance.findOne({
-                    employeeId: emp._id,
-                    leaveType: lt._id,
-                    year: currentYear,
-                });
-
-                const totalAllocated = balance ? Number(balance.totalAllocated) : (Number(lt.daysAllowedPerYear) || 12);
-                // Leave is deducted when approved: balanceDays = totalAllocated - usedDays
-                const balanceDays = Math.max(0, totalAllocated - usedDays);
-
-                if (!balance) {
-                    await LeaveBalance.create({
-                        employeeId: emp._id,
-                        leaveType: lt._id,
-                        year: currentYear,
-                        totalAllocated,
-                        usedDays,
-                        pendingDays,
-                        balanceDays,
-                    });
-                } else if (balance.usedDays !== usedDays || balance.pendingDays !== pendingDays || balance.balanceDays !== balanceDays) {
-                    balance.usedDays = usedDays;
-                    balance.pendingDays = pendingDays;
-                    balance.balanceDays = balanceDays;
-                    await balance.save();
-                }
-            }
+        if (paging) {
+            return await sendPagedBalances(req, res, paging, {
+                year: currentYear,
+                employeeId: targetEmployeeId,
+                leaveType: req.body?.leaveType || req.body?.leaveTypeId,
+                isAdmin,
+            });
         }
 
         const query = { year: currentYear };

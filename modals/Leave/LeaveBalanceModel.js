@@ -37,4 +37,7 @@ const leaveBalanceSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+// The listing and the balance sync look rows up by (year, employee, leave type).
+leaveBalanceSchema.index({ year: 1, employeeId: 1, leaveType: 1 });
+
 module.exports = mongoose.model("LeaveBalance", leaveBalanceSchema);

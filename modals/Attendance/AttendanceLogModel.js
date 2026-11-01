@@ -42,4 +42,9 @@ const attendanceLogSchema = new mongoose.Schema(
     { timestamps: true }
 );
 
+// Listing sorts by date (newest first) with `_id` as the paging tiebreaker,
+// and the add/edit duplicate check looks up (employee, date).
+attendanceLogSchema.index({ date: -1, _id: 1 });
+attendanceLogSchema.index({ employeeId: 1, date: 1 });
+
 module.exports = mongoose.model("AttendanceLog", attendanceLogSchema);
