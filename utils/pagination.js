@@ -57,7 +57,25 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const dateCondition = (raw) => {
     const match = String(raw).trim().match(OPERATOR_RE);
     if (!match) return null;
-    const dayStart = new Date(`${match[2].trim().slice(0, 10)}T00:00:00.000Z`);
+    const operand = match[2].trim();
+
+    const monthMatch = /^(\d{4})-(\d{2})$/.exec(operand);
+    if (monthMatch) {
+        const year = Number(monthMatch[1]);
+        const month = Number(monthMatch[2]);
+        const start = new Date(Date.UTC(year, month - 1, 1));
+        if (Number.isNaN(start.getTime())) return null;
+        const end = new Date(Date.UTC(year, month, 1));
+        switch (match[1]) {
+            case ">": return { $gte: end };
+            case ">=": return { $gte: start };
+            case "<": return { $lt: start };
+            case "<=": return { $lt: end };
+            default: return { $gte: start, $lt: end };
+        }
+    }
+
+    const dayStart = new Date(`${operand.slice(0, 10)}T00:00:00.000Z`);
     if (Number.isNaN(dayStart.getTime())) return null;
     const nextDay = new Date(dayStart.getTime() + DAY_MS);
     switch (match[1]) {

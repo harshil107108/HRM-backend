@@ -62,14 +62,17 @@ const LOG_FILTER_FIELDS = {
 // Paged variant of the listing: search + column filters run on the server so
 // they cover every record, not just the pages loaded so far.
 const getPagedAttendanceLogs = async (req, res, paging) => {
-    const { search, filters, date } = req.body;
+    const { search, filters, date, employeeId } = req.body;
     const combinedFilters = { ...(filters || {}) };
     if (date && !combinedFilters.date) {
         combinedFilters.date = date;
     }
     const and = buildFilterConditions(combinedFilters, LOG_FILTER_FIELDS);
 
-    if (filters?.employeeName) {
+    const targetEmployeeId = employeeId || filters?.employeeId;
+    if (targetEmployeeId && mongoose.isValidObjectId(targetEmployeeId)) {
+        and.push({ employeeId: new mongoose.Types.ObjectId(targetEmployeeId) });
+    } else if (filters?.employeeName) {
         const ids = await findEmployeeIdsByText(filters.employeeName);
         if (ids) and.push({ employeeId: { $in: ids } });
     }
@@ -114,6 +117,11 @@ module.exports.getAttendanceLogs = async (req, res) => {
         if (targetDate) {
             const dCond = dateCondition(targetDate);
             if (dCond) filter.date = dCond;
+        }
+
+        const targetEmployeeId = req.body?.employeeId || req.body?.filters?.employeeId;
+        if (targetEmployeeId && mongoose.isValidObjectId(targetEmployeeId)) {
+            filter.employeeId = new mongoose.Types.ObjectId(targetEmployeeId);
         }
 
         const logs = await AttendanceLog.find(filter)
@@ -221,34 +229,40 @@ module.exports.addEditAttendanceLog = async (req, res) => {
             });
         }
 
-        const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
-        for (const field of ["clockIn", "clockOut"]) {
-            if (logData[field] && !timePattern.test(logData[field])) {
+        if (logData.status === "Absent") {
+            logData.clockIn = "";
+            logData.clockOut = "";
+            logData.totalHours = 0;
+        } else {
+            const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
+            for (const field of ["clockIn", "clockOut"]) {
+                if (logData[field] && !timePattern.test(logData[field])) {
+                    return res.status(400).json({
+                        success: false,
+                        message: `${field === "clockIn" ? "Clock In" : "Clock Out"} must be a valid time`,
+                    });
+                }
+            }
+
+            if (Boolean(logData.clockIn) !== Boolean(logData.clockOut)) {
                 return res.status(400).json({
                     success: false,
-                    message: `${field === "clockIn" ? "Clock In" : "Clock Out"} must be a valid time`,
+                    message: "Clock In and Clock Out must both be provided",
                 });
             }
-        }
 
-        if (Boolean(logData.clockIn) !== Boolean(logData.clockOut)) {
-            return res.status(400).json({
-                success: false,
-                message: "Clock In and Clock Out must both be provided",
-            });
-        }
-
-        if (logData.clockIn && logData.clockOut) {
-            const toMinutes = (time) => {
-                const [hours, minutes] = time.split(":").map(Number);
-                return hours * 60 + minutes;
-            };
-            const duration =
-                (toMinutes(logData.clockOut) -
-                    toMinutes(logData.clockIn) +
-                    24 * 60) %
-                (24 * 60);
-            logData.totalHours = Number((duration / 60).toFixed(1));
+            if (logData.clockIn && logData.clockOut) {
+                const toMinutes = (time) => {
+                    const [hours, minutes] = time.split(":").map(Number);
+                    return hours * 60 + minutes;
+                };
+                const duration =
+                    (toMinutes(logData.clockOut) -
+                        toMinutes(logData.clockIn) +
+                        24 * 60) %
+                    (24 * 60);
+                logData.totalHours = Number((duration / 60).toFixed(1));
+            }
         }
 
         if (_id) {
