@@ -5,6 +5,7 @@ const {
     parsePaging,
     buildPagination,
     containsRegex,
+    dateCondition,
     dateSearchRange,
     buildFilterConditions,
     buildSort,
@@ -61,8 +62,12 @@ const LOG_FILTER_FIELDS = {
 // Paged variant of the listing: search + column filters run on the server so
 // they cover every record, not just the pages loaded so far.
 const getPagedAttendanceLogs = async (req, res, paging) => {
-    const { search, filters } = req.body;
-    const and = buildFilterConditions(filters, LOG_FILTER_FIELDS);
+    const { search, filters, date } = req.body;
+    const combinedFilters = { ...(filters || {}) };
+    if (date && !combinedFilters.date) {
+        combinedFilters.date = date;
+    }
+    const and = buildFilterConditions(combinedFilters, LOG_FILTER_FIELDS);
 
     if (filters?.employeeName) {
         const ids = await findEmployeeIdsByText(filters.employeeName);
@@ -104,7 +109,14 @@ module.exports.getAttendanceLogs = async (req, res) => {
         const paging = parsePaging(req.body);
         if (paging) return await getPagedAttendanceLogs(req, res, paging);
 
-        const logs = await AttendanceLog.find({})
+        const filter = {};
+        const targetDate = req.body?.date || req.body?.filters?.date;
+        if (targetDate) {
+            const dCond = dateCondition(targetDate);
+            if (dCond) filter.date = dCond;
+        }
+
+        const logs = await AttendanceLog.find(filter)
             .populate("employeeId", "employeeId firstName middleName lastName officialEmail departmentId branchId")
             .sort({ date: -1 });
 
