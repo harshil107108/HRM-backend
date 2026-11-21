@@ -1,5 +1,11 @@
 const mongoose = require("mongoose");
 
+// Helper: Regular staff requires full employee onboarding details (branch, dept, PAN, etc.)
+// Administrators (SUPER_ADMIN and client ADMIN provisioned from License) are exempt.
+const isRegularStaff = function () {
+    return !["SUPER_ADMIN", "ADMIN"].includes(this.primaryRole);
+};
+
 const employeeMasterSchema = new mongoose.Schema(
     {
         // =========================
@@ -40,11 +46,13 @@ const employeeMasterSchema = new mongoose.Schema(
             type: String,
             required: true,
             enum: ["male", "female", "other"],
+            default: "other",
         },
 
         dateOfBirth: {
             type: Date,
-            required: true,
+            required: isRegularStaff,
+            default: () => new Date("1995-01-01"),
         },
 
         maritalStatus: {
@@ -81,25 +89,25 @@ const employeeMasterSchema = new mongoose.Schema(
         companyId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "CompanyMaster",
-            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
+            required: isRegularStaff,
         },
 
         branchId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "BranchMaster",
-            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
+            required: isRegularStaff,
         },
 
         departmentId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "DepartmentMaster",
-            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
+            required: isRegularStaff,
         },
 
         designationId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "DesignationMaster",
-            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
+            required: isRegularStaff,
         },
 
         reportingManager: {
@@ -110,13 +118,14 @@ const employeeMasterSchema = new mongoose.Schema(
 
         employmentType: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             enum: [
                 "FULL_TIME",
                 "PART_TIME",
                 "CONTRACT",
                 "INTERN",
             ],
+            default: "FULL_TIME",
         },
 
         employeeStatus: {
@@ -138,7 +147,8 @@ const employeeMasterSchema = new mongoose.Schema(
 
         joiningDate: {
             type: Date,
-            required: true,
+            required: isRegularStaff,
+            default: Date.now,
         },
 
         confirmationDate: {
@@ -165,15 +175,17 @@ const employeeMasterSchema = new mongoose.Schema(
 
         personalEmail: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             trim: true,
             lowercase: true,
+            default: "",
         },
 
         mobileNumber: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             trim: true,
+            default: "",
         },
 
         alternateMobile: {
@@ -184,44 +196,48 @@ const employeeMasterSchema = new mongoose.Schema(
 
         emergencyContactName: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             trim: true,
+            default: "",
         },
 
         emergencyContactNumber: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             trim: true,
+            default: "",
         },
 
         countryId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "CountryMaster",
-            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
+            required: isRegularStaff,
         },
 
         stateId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "StateMaster",
-            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
+            required: isRegularStaff,
         },
 
         cityId: {
             type: mongoose.Schema.Types.ObjectId,
             ref: "CityMaster",
-            required: function () { return this.primaryRole !== "SUPER_ADMIN"; },
+            required: isRegularStaff,
         },
 
         postalCode: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             trim: true,
+            default: "",
         },
 
         currentAddress: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             trim: true,
+            default: "",
         },
 
 
@@ -231,15 +247,17 @@ const employeeMasterSchema = new mongoose.Schema(
 
         aadhaarNumber: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             trim: true,
+            default: "",
         },
 
         panNumber: {
             type: String,
-            required: true,
+            required: isRegularStaff,
             trim: true,
             uppercase: true,
+            default: "",
         },
 
         passportNumber: {

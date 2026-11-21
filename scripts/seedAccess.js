@@ -133,6 +133,13 @@ const MENUS = [
             ["SET_SECURITY", "Security", "/settings/security"],
         ],
     },
+    {
+        code: "MANAGER", name: "Manager", path: "/manager", icon: "KeyRound",
+        children: [
+            ["MGR_PLAN", "Plan Management", "/manager/plans"],
+            ["MGR_LICENSE", "License Keys", "/manager/licenses"],
+        ],
+    },
 ];
 
 const ALL = ["view", "add", "edit", "delete"];

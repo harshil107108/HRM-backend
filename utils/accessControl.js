@@ -21,16 +21,29 @@ const toPlainPermissions = (permissions) => {
 };
 
 // Effective rights per active menu code, applying the parent-group rule.
-// Super Admin gets every action on every active menu.
-const effectivePermissions = (menus, rolePermissions, isSuperAdmin) => {
+// Super Admin gets every action on every active menu without requiring a license key.
+// Non-Super-Admin users are strictly bounded by activeLicense.effectiveLimits.allAllowedModules.
+const effectivePermissions = (menus, rolePermissions, isSuperAdmin, activeLicense) => {
     const perms = toPlainPermissions(rolePermissions);
     const byId = new Map(menus.map((m) => [String(m._id), m]));
     const result = {};
 
+    // Helper: is this module code permitted by the active license?
+    const isLicensed = (code) => {
+        if (isSuperAdmin) return true;
+        if (!activeLicense || !activeLicense.isActive) return false;
+        const allowed = activeLicense.effectiveLimits?.allAllowedModules;
+        if (!Array.isArray(allowed) || allowed.length === 0) return true;
+        return allowed.includes(code);
+    };
+
     menus.forEach((menu) => {
         if (!menu.isActive) return;
+        if (!isLicensed(menu.menuCode)) return;
+
         const parent = menu.parentMenu ? byId.get(String(menu.parentMenu)) : null;
         if (parent && !parent.isActive) return;
+        if (parent && !isLicensed(parent.menuCode)) return;
 
         if (isSuperAdmin) {
             result[menu.menuCode] = [...ACTIONS];

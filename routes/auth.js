@@ -9,5 +9,6 @@ router.post("/face-enroll", authController.faceEnroll);
 router.get("/enrollment-candidates", authController.getEnrollmentCandidates);
 router.post("/me", authenticate, authController.me);
 router.get("/me", authenticate, authController.me);
+router.post("/logout", authenticate, authController.logout);
 
 module.exports = router;

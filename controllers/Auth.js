@@ -86,7 +86,7 @@ const ensureDefaultAdminAndRoles = async () => {
 };
 
 // Everything the frontend needs after sign-in / on reload.
-const sessionPayload = ({ employee, role, roleCode, isSuperAdmin, permissions, menus }) => {
+const sessionPayload = ({ employee, role, roleCode, isSuperAdmin, permissions, menus, hasActiveLicense, licenseDetails }) => {
     const designationName = employee.designationId?.designationname || "";
     const designationCode = employee.designationId?.designationcode || "";
     const departmentName = employee.departmentId?.departmentname || "";
@@ -108,12 +108,56 @@ const sessionPayload = ({ employee, role, roleCode, isSuperAdmin, permissions, m
         },
         permissions,
         menus: buildMenuTree(menus, permissions),
+        hasActiveLicense: isSuperAdmin ? true : Boolean(hasActiveLicense),
+        licenseDetails: licenseDetails || null,
         // Every active menu's route (permitted or not), so the app can tell
         // "no permission" apart from "not a menu page".
         routes: menus
             .filter((m) => m.isActive && m.path)
             .map((m) => ({ menuCode: m.menuCode, path: m.path, parent: m.parentMenu ? String(m.parentMenu) : null })),
     };
+};
+
+// Seat quota enforcement helper for active license
+const enforceSeatLimitOnLogin = async (employeeId, employeeUsername) => {
+    const { getSystemLicense } = require("../middlewares/licenseGuard");
+    const activeLic = await getSystemLicense();
+    if (!activeLic || !activeLic.isActive) return { success: true };
+
+    const maxSeats = activeLic.effectiveLimits?.totalActiveUsers || 10;
+    const sessionExpiryMs = 12 * 60 * 60 * 1000;
+    const cutoff = new Date(Date.now() - sessionExpiryMs);
+
+    // Filter out stale user sessions
+    activeLic.activeUsers = (activeLic.activeUsers || []).filter(
+        (u) => u.lastSeen && new Date(u.lastSeen) > cutoff
+    );
+
+    const existingIdx = activeLic.activeUsers.findIndex(
+        (u) => String(u.userId) === String(employeeId)
+    );
+
+    if (existingIdx !== -1) {
+        activeLic.activeUsers[existingIdx].lastSeen = new Date();
+        await activeLic.save();
+        return { success: true };
+    }
+
+    if (activeLic.activeUsers.length >= maxSeats) {
+        return {
+            success: false,
+            message: `License seat limit reached (${activeLic.activeUsers.length}/${maxSeats} seats in use). A ${activeLic.activeUsers.length + 1}th user cannot log in under this active license key. Please contact your administrator to upgrade your subscription plan or add seat booster packs.`,
+        };
+    }
+
+    activeLic.activeUsers.push({
+        userId: employeeId,
+        username: employeeUsername || "",
+        loginAt: new Date(),
+        lastSeen: new Date(),
+    });
+    await activeLic.save();
+    return { success: true };
 };
 
 module.exports.login = async (req, res) => {
@@ -127,7 +171,7 @@ module.exports.login = async (req, res) => {
             return res.status(400).json({ success: false, message: "Enter your username and password." });
         }
 
-        const employee = await EmployeeMaster.findOne({ username }).select("_id password").lean();
+        const employee = await EmployeeMaster.findOne({ username }).select("_id password username").lean();
         // Same message whether the username or the password is wrong.
         const valid = employee?.password ? await bcrypt.compare(password, employee.password) : false;
         if (!valid) {
@@ -139,8 +183,20 @@ module.exports.login = async (req, res) => {
             return res.status(403).json({ success: false, message: access.error });
         }
 
+        // Enforce user seat quota if not Super Admin
+        if (!access.isSuperAdmin) {
+            const seatCheck = await enforceSeatLimitOnLogin(employee._id, employee.username);
+            if (!seatCheck.success) {
+                return res.status(403).json({
+                    success: false,
+                    code: "USER_SEAT_QUOTA_EXCEEDED",
+                    message: seatCheck.message,
+                });
+            }
+        }
+
         const token = jwt.sign(
-            { sub: String(employee._id), role: access.roleCode },
+            { sub: String(employee._id), role: access.roleCode, isSuperAdmin: access.isSuperAdmin },
             process.env.JWT_SECRET,
             { expiresIn: process.env.JWT_EXPIRES_IN || "12h" }
         );
@@ -248,6 +304,18 @@ module.exports.faceLogin = async (req, res) => {
                 success: false,
                 message: "Administrator accounts are restricted to credential login for security. Please sign in via the Admin Login tab."
             });
+        }
+
+        // Enforce user seat quota if not Super Admin
+        if (!access.isSuperAdmin) {
+            const seatCheck = await enforceSeatLimitOnLogin(employee._id, employee.username);
+            if (!seatCheck.success) {
+                return res.status(403).json({
+                    success: false,
+                    code: "USER_SEAT_QUOTA_EXCEEDED",
+                    message: seatCheck.message,
+                });
+            }
         }
 
         // 5. Automatic Attendance Punch-In
@@ -489,6 +557,28 @@ module.exports.faceEnroll = async (req, res) => {
     } catch (error) {
         console.error("Error during face enrollment:", error);
         return res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+/**
+ * Sign out and release active user license seat
+ */
+module.exports.logout = async (req, res) => {
+    try {
+        const employeeId = req.user?.employee?._id || req.body?.employeeId;
+        if (employeeId && !req.user?.isSuperAdmin) {
+            const { getSystemLicense } = require("../middlewares/licenseGuard");
+            const activeLic = await getSystemLicense();
+            if (activeLic && Array.isArray(activeLic.activeUsers)) {
+                activeLic.activeUsers = activeLic.activeUsers.filter(
+                    (u) => String(u.userId) !== String(employeeId)
+                );
+                await activeLic.save();
+            }
+        }
+        res.status(200).json({ success: true, message: "Logged out successfully." });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
     }
 };
 

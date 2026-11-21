@@ -19,6 +19,9 @@ app.use(cors({
 }));
 app.use("/uploads",express.static(path.join(__dirname, "uploads")));
 
+const { validateLicense } = require("./middlewares/licenseGuard");
+app.use(validateLicense);
+
 const mongoURI = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/HRM';
 
 mongoose.connect(mongoURI).then(() => {
@@ -163,17 +166,20 @@ app.use("/administration/menu", MenuRouter);
 // Settings
 app.use("/settings/system", SystemSettingRouter);
 
-// Dashboard
+// Manager Suite (Plans & License Keys)
+const PlanRouter = require("./routes/Manager/planRoutes");
+const LicenseRouter = require("./routes/Manager/licenseRoutes");
+app.use("/manager/plans", PlanRouter);
+app.use("/manager/licenses", LicenseRouter);
+
 app.use("/dashboard", DashboardRouter);
 
 const ChatRouter = require("./routes/Chat/chat");
 const http = require("http");
 const { setupChatSocket } = require("./socket/chatSocket");
 
-// Notifications
 app.use("/notifications", NotificationRouter);
 
-// Internal Chat
 app.use("/chat", ChatRouter);
 
 const server = http.createServer(app);

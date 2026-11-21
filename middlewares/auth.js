@@ -81,6 +81,9 @@ const API_ACCESS = [
         prefix: "/settings/system",
         codes: ["SET_GENERAL", "SET_NOTIFICATION", "SET_EMAIL", "SET_INTEGRATION", "SET_SECURITY"],
     },
+
+    { prefix: "/manager/plans", codes: ["MGR_PLAN"] },
+    { prefix: "/manager/licenses", codes: ["MGR_LICENSE"] },
 ].sort((a, b) => b.prefix.length - a.prefix.length);
 
 // Dropdown/lookup sources other modules' forms depend on: any signed-in
@@ -162,8 +165,30 @@ const loadAccessForEmployee = async (employeeId) => {
     }
 
     const isSuperAdmin = roleCode === SUPER_ADMIN_ROLE;
-    const permissions = effectivePermissions(menus, role.permissions, isSuperAdmin);
-    return { employee, role, roleCode, isSuperAdmin, permissions, menus };
+    const { getSystemLicense } = require("./licenseGuard");
+    const activeLicense = await getSystemLicense();
+
+    const permissions = effectivePermissions(menus, role.permissions, isSuperAdmin, activeLicense);
+    const hasActiveLicense = isSuperAdmin ? true : Boolean(activeLicense && activeLicense.isActive);
+
+    return {
+        employee,
+        role,
+        roleCode,
+        isSuperAdmin,
+        permissions,
+        menus,
+        hasActiveLicense,
+        licenseDetails: activeLicense
+            ? {
+                  licenseKey: activeLicense.licenseKey,
+                  status: activeLicense.status,
+                  companyName: activeLicense.clientInfo?.companyName,
+                  allowedModules: activeLicense.effectiveLimits?.allAllowedModules || [],
+                  expiresAt: activeLicense.dates?.expiresAt,
+              }
+            : null,
+    };
 };
 
 const authenticate = async (req, res, next) => {
