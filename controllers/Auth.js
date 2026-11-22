@@ -196,8 +196,14 @@ module.exports.login = async (req, res) => {
         }
 
         const token = jwt.sign(
-            { sub: String(employee._id), role: access.roleCode, isSuperAdmin: access.isSuperAdmin },
-            process.env.JWT_SECRET,
+            {
+                sub: String(employee._id),
+                role: access.roleCode,
+                isSuperAdmin: access.isSuperAdmin,
+                licenseKey: req.license?.licenseKey || "",
+                tenantDbName: req.tenantDbName || "",
+            },
+            process.env.JWT_SECRET || "hrm_default_secret_key_2026",
             { expiresIn: process.env.JWT_EXPIRES_IN || "12h" }
         );
 
@@ -359,8 +365,14 @@ module.exports.faceLogin = async (req, res) => {
 
         // 6. Generate JWT Session Token
         const token = jwt.sign(
-            { sub: String(employee._id), role: access.roleCode },
-            process.env.JWT_SECRET,
+            {
+                sub: String(employee._id),
+                role: access.roleCode,
+                isSuperAdmin: access.isSuperAdmin,
+                licenseKey: req.license?.licenseKey || "",
+                tenantDbName: req.tenantDbName || "",
+            },
+            process.env.JWT_SECRET || "hrm_default_secret_key_2026",
             { expiresIn: process.env.JWT_EXPIRES_IN || "12h" }
         );
 
@@ -528,8 +540,14 @@ module.exports.faceEnroll = async (req, res) => {
             }
 
             const token = jwt.sign(
-                { sub: String(employee._id), role: access.roleCode },
-                process.env.JWT_SECRET,
+                {
+                    sub: String(employee._id),
+                    role: access.roleCode,
+                    isSuperAdmin: access.isSuperAdmin,
+                    licenseKey: req.license?.licenseKey || "",
+                    tenantDbName: req.tenantDbName || "",
+                },
+                process.env.JWT_SECRET || "hrm_default_secret_key_2026",
                 { expiresIn: process.env.JWT_EXPIRES_IN || "12h" }
             );
 

@@ -75,7 +75,7 @@ async function validateLicense(req, res, next) {
             return next();
         }
 
-        const license = await getSystemLicense();
+        const license = req.license || (await getSystemLicense());
 
         // If no license is registered yet, allow manager routes and auth to set it up
         if (!license) {

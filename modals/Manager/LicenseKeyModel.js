@@ -24,6 +24,11 @@ const licenseKeySchema = new mongoose.Schema(
             trim: true,
             default: () => `CLI-${Date.now().toString(36).toUpperCase()}`,
         },
+        tenantDbName: {
+            type: String,
+            trim: true,
+            default: "",
+        },
         clientInfo: {
             name: {
                 type: String,
@@ -197,6 +202,10 @@ licenseKeySchema.pre("validate", function () {
     if (!this.licenseId) {
         const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
         this.licenseId = `LIC-${Date.now().toString(36).toUpperCase()}-${rand}`;
+    }
+    if (!this.tenantDbName && this.licenseId) {
+        const cleanId = String(this.licenseId).replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+        this.tenantDbName = `HRM_tenant_${cleanId}`;
     }
     if (this.dates && this.dates.expiresAt && this.dates.issuedAt) {
         if (new Date(this.dates.expiresAt) <= new Date(this.dates.issuedAt)) {

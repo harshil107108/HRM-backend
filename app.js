@@ -1,3 +1,6 @@
+const { enableTenantProxy } = require("./utils/tenantContext");
+enableTenantProxy();
+
 const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
@@ -18,6 +21,9 @@ app.use(cors({
     credentials: true
 }));
 app.use("/uploads",express.static(path.join(__dirname, "uploads")));
+
+const { resolveTenant } = require("./middlewares/tenantResolver");
+app.use(resolveTenant);
 
 const { validateLicense } = require("./middlewares/licenseGuard");
 app.use(validateLicense);

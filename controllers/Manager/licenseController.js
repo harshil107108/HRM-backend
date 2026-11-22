@@ -4,6 +4,8 @@ const Plan = require("../../modals/Manager/PlanModel");
 const LicenseAuditLog = require("../../modals/Manager/LicenseAuditLogModel");
 const EmployeeMaster = require("../../modals/Employee/EmployeeMasterModel");
 const User = require("../../modals/Administration/UserModel");
+const { provisionTenantDatabase } = require("../../utils/tenantConnectionManager");
+const { invalidateLicenseKeyCache } = require("../../middlewares/tenantResolver");
 const {
     generateFormattedKey,
     signLicensePayload,
@@ -199,25 +201,25 @@ exports.generateLicense = async (req, res) => {
             renewalPolicy,
             isActive: Boolean(isActive),
             status: isActive ? "ACTIVE" : "GENERATED",
+            tenantDbName: `HRM_tenant_${licenseId.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase()}`,
             metadata: {
                 lastActionTimestamp: new Date(),
                 ipAddress: req.ip || "",
             },
         });
 
-        // If this key is being activated, deactivate all other license keys
-        if (isActive) {
-            await LicenseKey.updateMany({}, { $set: { isActive: false } });
-        }
-
         await licenseDoc.save();
-        if (isActive) {
-            invalidateLicenseCache();
-        }
+        invalidateLicenseCache();
+        invalidateLicenseKeyCache(licenseKeyStr);
 
-        // Provision Client Admin User if credentials were provided
-        if (adminCredentials?.username && adminCredentials?.password) {
-            await provisionClientAdminUser(clientInfo, adminCredentials);
+        // Provision isolated Tenant Database with standard Roles, Menus, and Client Admin account
+        try {
+            await provisionTenantDatabase(licenseDoc.tenantDbName, {
+                clientInfo: licenseDoc.clientInfo,
+                adminCredentials: licenseDoc.adminCredentials,
+            });
+        } catch (provErr) {
+            console.error("Warning: provisionTenantDatabase failed during generation:", provErr);
         }
 
         // Audit Log
@@ -387,8 +389,10 @@ exports.activateLicense = async (req, res) => {
             });
         }
 
-        // Deactivate all other license keys so only one is active at a time
-        await LicenseKey.updateMany({ _id: { $ne: license._id } }, { $set: { isActive: false } });
+        if (!license.tenantDbName) {
+            const cleanId = String(license.licenseId || license._id).replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+            license.tenantDbName = `HRM_tenant_${cleanId}`;
+        }
 
         license.isActive = true;
         license.status = "ACTIVE";
@@ -399,10 +403,16 @@ exports.activateLicense = async (req, res) => {
         await license.save();
 
         invalidateLicenseCache();
+        invalidateLicenseKeyCache(license.licenseKey);
 
-        // Provision Client Admin User if credentials were set on this license
-        if (license.adminCredentials?.username && license.adminCredentials?.password) {
-            await provisionClientAdminUser(license.clientInfo, license.adminCredentials);
+        // Provision / Verify isolated Tenant Database with standard Roles, Menus, and Client Admin account
+        try {
+            await provisionTenantDatabase(license.tenantDbName, {
+                clientInfo: license.clientInfo,
+                adminCredentials: license.adminCredentials,
+            });
+        } catch (provErr) {
+            console.error("Warning: provisionTenantDatabase failed during activation:", provErr);
         }
 
         await LicenseAuditLog.create({
@@ -416,11 +426,82 @@ exports.activateLicense = async (req, res) => {
         return res.status(200).json({
             success: true,
             message: "License activated successfully. All features and quotas are now unlocked.",
-            data: license,
+            data: {
+                licenseKey: license.licenseKey,
+                clientId: license.clientId,
+                companyName: license.clientInfo?.companyName || "Organization",
+                status: license.status,
+                expiresAt: license.dates?.expiresAt,
+                tenantDbName: license.tenantDbName,
+                effectiveLimits: license.effectiveLimits,
+            },
             adminUsername: license.adminCredentials?.username || null,
         });
     } catch (err) {
         return res.status(500).json({ success: false, message: err.message });
+    }
+};
+
+/**
+ * 4.1 Verify a License Key (Public endpoint for frontend bootstrap validation)
+ */
+exports.verifyLicense = async (req, res) => {
+    try {
+        const rawKey =
+            req.body?.licenseKey ||
+            req.query?.licenseKey ||
+            req.headers["x-license-key"] ||
+            "";
+
+        if (!rawKey || typeof rawKey !== "string" || !rawKey.trim()) {
+            return res.status(400).json({
+                success: false,
+                valid: false,
+                message: "License key is required for verification.",
+            });
+        }
+
+        const cleanKey = rawKey.trim().toUpperCase();
+        const license = await LicenseKey.findOne({ licenseKey: cleanKey }).populate("planId");
+
+        if (!license) {
+            return res.status(404).json({
+                success: false,
+                valid: false,
+                message: "The provided license key was not found.",
+            });
+        }
+
+        const sigCheck = verifyLicenseSignature(license.signaturePayload);
+        if (!sigCheck.isValid) {
+            return res.status(400).json({
+                success: false,
+                valid: false,
+                message: `License validation failed: ${sigCheck.reason}`,
+            });
+        }
+
+        const health = evaluateLicenseStatus(license, new Date());
+        const isValid =
+            !["SUSPENDED", "REVOKED"].includes(health.status) &&
+            license.status !== "REVOKED" &&
+            license.status !== "SUSPENDED" &&
+            !(health.status === "EXPIRED" && health.accessLevel === "LOCKED");
+
+        return res.status(200).json({
+            success: true,
+            valid: isValid,
+            status: health.status,
+            accessLevel: health.accessLevel,
+            companyName: license.clientInfo?.companyName || "Organization",
+            clientInfo: license.clientInfo,
+            dates: license.dates,
+            plan: license.planId,
+            effectiveLimits: license.effectiveLimits,
+            tenantDbName: license.tenantDbName,
+        });
+    } catch (err) {
+        return res.status(500).json({ success: false, valid: false, message: err.message });
     }
 };
 
