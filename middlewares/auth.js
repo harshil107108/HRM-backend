@@ -2,6 +2,8 @@ const jwt = require("jsonwebtoken");
 const EmployeeMaster = require("../modals/Employee/EmployeeMasterModel");
 const Role = require("../modals/Administration/RoleModel");
 const Menu = require("../modals/Administration/MenuModel");
+const LicenseKey = require("../modals/Manager/LicenseKeyModel");
+const { getActiveTenantContext } = require("../utils/tenantContext");
 const {
     SUPER_ADMIN_ROLE,
     effectivePermissions,
@@ -123,7 +125,7 @@ const resolveAction = (req) => {
 // =========================================================
 // authenticate: verifies the Bearer token and loads the user
 // =========================================================
-const loadAccessForEmployee = async (employeeId) => {
+const loadAccessForEmployee = async (employeeId, explicitLicense = null) => {
     const employee = await EmployeeMaster.findById(employeeId)
         .select("employeeId firstName middleName lastName username officialEmail profileImage primaryRole designationId departmentId isActive employeeStatus")
         .populate("designationId", "designationname designationcode")
@@ -165,10 +167,19 @@ const loadAccessForEmployee = async (employeeId) => {
     }
 
     const isSuperAdmin = roleCode === SUPER_ADMIN_ROLE;
-    const { getSystemLicense } = require("./licenseGuard");
-    const activeLicense = await getSystemLicense();
+    let activeLicense = explicitLicense;
+    if (!activeLicense) {
+        const tenantCtx = getActiveTenantContext();
+        if (tenantCtx?.licenseKey) {
+            activeLicense = await LicenseKey.findOne({ licenseKey: tenantCtx.licenseKey.toUpperCase() }).populate("planId");
+        }
+    }
+    if (!activeLicense) {
+        const { getSystemLicense } = require("./licenseGuard");
+        activeLicense = await getSystemLicense();
+    }
 
-    const permissions = effectivePermissions(menus, role.permissions, isSuperAdmin, activeLicense);
+    const permissions = effectivePermissions(menus, role.permissions, isSuperAdmin, activeLicense, roleCode);
     const hasActiveLicense = isSuperAdmin ? true : Boolean(activeLicense && activeLicense.isActive);
 
     return {
@@ -206,7 +217,7 @@ const authenticate = async (req, res, next) => {
             return res.status(401).json({ success: false, message: "Your session has expired. Please sign in again." });
         }
 
-        const access = await loadAccessForEmployee(payload.sub);
+        const access = await loadAccessForEmployee(payload.sub, req.license);
         if (access.error) {
             return res.status(401).json({ success: false, message: access.error });
         }

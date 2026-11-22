@@ -189,38 +189,62 @@ async function provisionTenantDatabase(tenantDbName, { clientInfo = {}, adminCre
             }
         }
 
-        // 2. Seed Default Roles
+        // 2. Seed Default Roles with Operational Permissions
+        const allTenantMenus = await Menu.find({}).lean();
+        const allActions = ["view", "add", "edit", "delete"];
+        const adminPerms = {};
+        for (const m of allTenantMenus) {
+            adminPerms[m.menuCode] = [...allActions];
+        }
+
         const defaultRoles = [
             {
                 roleName: "Administrator",
                 roleCode: "ADMIN",
                 isSystemDefault: true,
                 description: "Full operational access across all modules",
+                permissions: adminPerms,
             },
             {
                 roleName: "Manager",
                 roleCode: "MANAGER",
                 isSystemDefault: true,
                 description: "Departmental and team management access",
+                permissions: {},
             },
             {
                 roleName: "Employee",
                 roleCode: "EMPLOYEE",
                 isSystemDefault: true,
                 description: "Self-service access for regular staff",
+                permissions: {},
             },
             {
                 roleName: "Super Administrator",
                 roleCode: "SUPER_ADMIN",
                 isSystemDefault: true,
                 description: "Unrestricted master access",
+                permissions: {},
             },
         ];
 
         for (const roleDef of defaultRoles) {
-            const exists = await Role.findOne({ roleCode: roleDef.roleCode });
-            if (!exists) {
+            const existingRole = await Role.findOne({ roleCode: roleDef.roleCode });
+            if (!existingRole) {
                 await Role.create(roleDef);
+            } else if (roleDef.roleCode === "ADMIN") {
+                // Keep ADMIN role aligned with full operational permissions on all menus
+                await Role.updateOne(
+                    { roleCode: "ADMIN" },
+                    {
+                        $set: {
+                            roleName: "Administrator",
+                            description: "Full operational access across all modules",
+                            isSystemDefault: true,
+                            permissions: adminPerms,
+                        },
+                    }
+                );
             }
         }
 
@@ -274,6 +298,109 @@ async function provisionTenantDatabase(tenantDbName, { clientInfo = {}, adminCre
                     panNumber: "AAAAA0000A",
                     isActive: true,
                 });
+            }
+        }
+
+        // 4. Provision Primary Organization Structure if empty (Company, Branch, Department, Designation)
+        if (clientInfo.companyName) {
+            try {
+                const CompanyMaster = require("../modals/Organization/CompanyMasterModel");
+                const BranchMaster = require("../modals/Organization/BranchMasterModel");
+                const DepartmentMaster = require("../modals/Organization/DepartmentMasterModel");
+                const DesignationMaster = require("../modals/Organization/DesignationMaster");
+                const CountryMaster = require("../modals/Master/CountryMasterModel");
+                const StateMaster = require("../modals/Master/StateMasterModel");
+                const CityMaster = require("../modals/Master/CityMasterModel");
+
+                const companyCount = await CompanyMaster.countDocuments();
+                if (companyCount === 0) {
+                    let country = await CountryMaster.findOne({ isActive: true });
+                    if (!country) {
+                        country = await CountryMaster.create({
+                            countryName: "India",
+                            countryCode: "IN",
+                            isoCode: "IND",
+                            phoneCode: "91",
+                            nationality: "Indian",
+                            isActive: true,
+                        });
+                    }
+
+                    let state = await StateMaster.findOne({ country: country._id });
+                    if (!state) {
+                        state = await StateMaster.create({
+                            stateName: "Default State",
+                            stateCode: "DS",
+                            country: country._id,
+                            isActive: true,
+                        });
+                    }
+
+                    let city = await CityMaster.findOne({ state: state._id });
+                    if (!city) {
+                        city = await CityMaster.create({
+                            cityName: "Default City",
+                            state: state._id,
+                            country: country._id,
+                            isActive: true,
+                        });
+                    }
+
+                    const compName = clientInfo.companyName;
+                    const compCode = compName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase() || "CORP";
+
+                    const primaryCompany = await CompanyMaster.create({
+                        companyName: compName,
+                        legalName: compName,
+                        companyCode: compCode,
+                        businessEmail: clientInfo.email || "admin@organization.local",
+                        phone: "9999999999",
+                        website: "https://example.com",
+                        gstNumber: "22AAAAA0000A1Z5",
+                        panNumber: "AAAAA0000A",
+                        registrationNumber: "REG0001",
+                        establishDate: new Date("2020-01-01"),
+                        addressLine1: "Headquarters",
+                        country: country._id,
+                        state: state._id,
+                        city: city._id,
+                        postalCode: "380001",
+                        isActive: true,
+                    });
+
+                    const primaryBranch = await BranchMaster.create({
+                        branchcode: `${compCode}-HQ`,
+                        branchname: "Head Office",
+                        parentcompany: primaryCompany._id,
+                        branchtype: "Headquarters",
+                        addressLine1: "Headquarters",
+                        country: country._id,
+                        state: state._id,
+                        city: city._id,
+                        postalCode: "380001",
+                        isActive: true,
+                    });
+
+                    const primaryDept = await DepartmentMaster.create({
+                        departmentname: "Administration",
+                        departmentcode: "ADM",
+                        company: primaryCompany._id,
+                        branch: primaryBranch._id,
+                        isActive: true,
+                    });
+
+                    await DesignationMaster.create({
+                        designationname: "Administrator",
+                        designationcode: "ADM",
+                        shortname: "Admin",
+                        company: primaryCompany._id,
+                        branch: primaryBranch._id,
+                        department: primaryDept._id,
+                        isActive: true,
+                    });
+                }
+            } catch (seedErr) {
+                console.error("Warning: Tenant org structure auto-seed:", seedErr.message);
             }
         }
 

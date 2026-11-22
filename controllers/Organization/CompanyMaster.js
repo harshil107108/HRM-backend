@@ -149,7 +149,7 @@ module.exports.deleteCompanyById = async (req, res) => {
 
 module.exports.getCompanyHelp = async (req, res) => {
     try {
-        const companies = await CompanyMaster.find(
+        let companies = await CompanyMaster.find(
             {
                 isActive: true
             },
@@ -161,6 +161,119 @@ module.exports.getCompanyHelp = async (req, res) => {
         ).sort({
             companyName: 1
         });
+
+        // If no company exists yet for this tenant, auto-seed the primary company from the active license clientInfo
+        if (companies.length === 0 && req.license?.clientInfo?.companyName) {
+            const compName = req.license.clientInfo.companyName;
+            const compCode = compName.replace(/[^a-zA-Z0-9]/g, "").slice(0, 6).toUpperCase() || "CORP";
+
+            const CountryMaster = require("../../modals/Master/CountryMasterModel");
+            const StateMaster = require("../../modals/Master/StateMasterModel");
+            const CityMaster = require("../../modals/Master/CityMasterModel");
+
+            let country = await CountryMaster.findOne({ isActive: true });
+            if (!country) {
+                country = await CountryMaster.create({
+                    countryName: "India",
+                    countryCode: "IN",
+                    isoCode: "IND",
+                    phoneCode: "91",
+                    nationality: "Indian",
+                    isActive: true,
+                });
+            }
+
+            let state = await StateMaster.findOne({ country: country._id });
+            if (!state) {
+                state = await StateMaster.create({
+                    stateName: "Default State",
+                    stateCode: "DS",
+                    country: country._id,
+                    isActive: true,
+                });
+            }
+
+            let city = await CityMaster.findOne({ state: state._id });
+            if (!city) {
+                city = await CityMaster.create({
+                    cityName: "Default City",
+                    state: state._id,
+                    country: country._id,
+                    isActive: true,
+                });
+            }
+
+            const primaryCompany = await CompanyMaster.create({
+                companyName: compName,
+                legalName: compName,
+                companyCode: compCode,
+                businessEmail: req.license.clientInfo.email || "admin@organization.local",
+                phone: "9999999999",
+                website: "https://example.com",
+                gstNumber: "22AAAAA0000A1Z5",
+                panNumber: "AAAAA0000A",
+                registrationNumber: "REG0001",
+                establishDate: new Date("2020-01-01"),
+                addressLine1: "Headquarters",
+                country: country._id,
+                state: state._id,
+                city: city._id,
+                postalCode: "380001",
+                isActive: true,
+            });
+
+            const BranchMaster = require("../../modals/Organization/BranchMasterModel");
+            const DepartmentMaster = require("../../modals/Organization/DepartmentMasterModel");
+            const DesignationMaster = require("../../modals/Organization/DesignationMaster");
+
+            let branch = await BranchMaster.findOne({ parentcompany: primaryCompany._id });
+            if (!branch) {
+                branch = await BranchMaster.create({
+                    branchcode: `${compCode}-HQ`,
+                    branchname: "Head Office",
+                    parentcompany: primaryCompany._id,
+                    branchtype: "Headquarters",
+                    addressLine1: "Headquarters",
+                    country: country._id,
+                    state: state._id,
+                    city: city._id,
+                    postalCode: "380001",
+                    isActive: true,
+                });
+            }
+
+            let dept = await DepartmentMaster.findOne({ company: primaryCompany._id });
+            if (!dept) {
+                dept = await DepartmentMaster.create({
+                    departmentname: "Administration",
+                    departmentcode: "ADM",
+                    company: primaryCompany._id,
+                    branch: branch._id,
+                    isActive: true,
+                });
+            }
+
+            let desig = await DesignationMaster.findOne({ company: primaryCompany._id });
+            if (!desig) {
+                await DesignationMaster.create({
+                    designationname: "Administrator",
+                    designationcode: "ADM",
+                    shortname: "Admin",
+                    company: primaryCompany._id,
+                    branch: branch._id,
+                    department: dept._id,
+                    isActive: true,
+                });
+            }
+
+            companies = [
+                {
+                    _id: primaryCompany._id,
+                    companyName: primaryCompany.companyName,
+                    companyCode: primaryCompany.companyCode,
+                },
+            ];
+        }
 
         res.status(200).json({
             success: true,

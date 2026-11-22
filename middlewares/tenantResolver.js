@@ -55,7 +55,7 @@ async function resolveTenant(req, res, next) {
             path.startsWith("/auth/license/verify") ||
             path.startsWith("/auth/license/activate");
 
-        // 2. Allow authenticated Super Admin to bypass tenant restrictions if accessing platform management
+        // 2. Allow authenticated Super Admin to bypass tenant restrictions anywhere
         const authHeader = req.headers.authorization || "";
         let tokenDecoded = null;
         if (authHeader.startsWith("Bearer ")) {
@@ -67,10 +67,10 @@ async function resolveTenant(req, res, next) {
                     (tokenDecoded.role === "SUPER_ADMIN" ||
                         tokenDecoded.roleCode === "SUPER_ADMIN" ||
                         tokenDecoded.primaryRole === "SUPER_ADMIN" ||
-                        tokenDecoded.isSuperAdmin === true) &&
-                    isMasterBypassed
+                        tokenDecoded.isSuperAdmin === true)
                 ) {
                     req.isSuperAdmin = true;
+                    // Super Admin has unrestricted access without needing any license key
                     return next();
                 }
             } catch (e) {
@@ -82,6 +82,11 @@ async function resolveTenant(req, res, next) {
             return next();
         }
 
+        // Allow /auth/login without license key for Super Admin authentication
+        if (path === "/auth/login" && !req.headers["x-license-key"] && !req.headers["x-tenant-license"] && !req.query.licenseKey) {
+            return next();
+        }
+
         // 3. Extract license key from Header, Query, or JWT
         let rawKey =
             req.headers["x-license-key"] ||
@@ -89,6 +94,22 @@ async function resolveTenant(req, res, next) {
             req.query.licenseKey ||
             tokenDecoded?.licenseKey ||
             "";
+
+        // Fallback 1: If user has a valid authenticated JWT token with a tenantDbName
+        if ((!rawKey || !rawKey.trim()) && tokenDecoded?.tenantDbName) {
+            const licByDb = await LicenseKey.findOne({ tenantDbName: tokenDecoded.tenantDbName });
+            if (licByDb) {
+                rawKey = licByDb.licenseKey;
+            }
+        }
+
+        // Fallback 2: If user is authenticated and has user ID (sub), find active tenant license
+        if ((!rawKey || !rawKey.trim()) && tokenDecoded?.sub) {
+            const activeLic = await LicenseKey.findOne({ isActive: true, status: "ACTIVE" }).sort({ createdAt: -1 });
+            if (activeLic) {
+                rawKey = activeLic.licenseKey;
+            }
+        }
 
         if (typeof rawKey !== "string" || !rawKey.trim()) {
             return res.status(403).json({

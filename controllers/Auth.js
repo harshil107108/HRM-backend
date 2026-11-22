@@ -178,9 +178,19 @@ module.exports.login = async (req, res) => {
             return res.status(401).json({ success: false, message: INVALID_LOGIN });
         }
 
-        const access = await loadAccessForEmployee(employee._id);
+        const access = await loadAccessForEmployee(employee._id, req.license);
         if (access.error) {
             return res.status(403).json({ success: false, message: access.error });
+        }
+
+        // Super Admin NEVER requires a license key.
+        // Non-Super-Admin users must have a tenant license key.
+        if (!access.isSuperAdmin && !req.tenantDb && !req.license) {
+            return res.status(403).json({
+                success: false,
+                code: "LICENSE_KEY_REQUIRED",
+                message: "A valid license key is required to log into your organization. Please activate your license key first.",
+            });
         }
 
         // Enforce user seat quota if not Super Admin
@@ -195,13 +205,23 @@ module.exports.login = async (req, res) => {
             }
         }
 
+        let jwtLicenseKey = req.license?.licenseKey || access.licenseDetails?.licenseKey || "";
+        let jwtTenantDb = req.tenantDbName || req.license?.tenantDbName || "";
+        if (!jwtTenantDb && jwtLicenseKey) {
+            const LicenseKey = require("../modals/Manager/LicenseKeyModel");
+            const foundLic = await LicenseKey.findOne({ licenseKey: jwtLicenseKey }).lean();
+            if (foundLic) {
+                jwtTenantDb = foundLic.tenantDbName || "";
+            }
+        }
+
         const token = jwt.sign(
             {
                 sub: String(employee._id),
                 role: access.roleCode,
                 isSuperAdmin: access.isSuperAdmin,
-                licenseKey: req.license?.licenseKey || "",
-                tenantDbName: req.tenantDbName || "",
+                licenseKey: jwtLicenseKey,
+                tenantDbName: jwtTenantDb,
             },
             process.env.JWT_SECRET || "hrm_default_secret_key_2026",
             { expiresIn: process.env.JWT_EXPIRES_IN || "12h" }
@@ -298,7 +318,7 @@ module.exports.faceLogin = async (req, res) => {
         }
 
         // 3. Load effective permissions and role
-        const access = await loadAccessForEmployee(employee._id);
+        const access = await loadAccessForEmployee(employee._id, req.license);
         if (access.error) {
             return res.status(403).json({ success: false, message: access.error });
         }
@@ -364,13 +384,23 @@ module.exports.faceLogin = async (req, res) => {
         );
 
         // 6. Generate JWT Session Token
+        let jwtLicenseKey = req.license?.licenseKey || access.licenseDetails?.licenseKey || "";
+        let jwtTenantDb = req.tenantDbName || req.license?.tenantDbName || "";
+        if (!jwtTenantDb && jwtLicenseKey) {
+            const LicenseKey = require("../modals/Manager/LicenseKeyModel");
+            const foundLic = await LicenseKey.findOne({ licenseKey: jwtLicenseKey }).lean();
+            if (foundLic) {
+                jwtTenantDb = foundLic.tenantDbName || "";
+            }
+        }
+
         const token = jwt.sign(
             {
                 sub: String(employee._id),
                 role: access.roleCode,
                 isSuperAdmin: access.isSuperAdmin,
-                licenseKey: req.license?.licenseKey || "",
-                tenantDbName: req.tenantDbName || "",
+                licenseKey: jwtLicenseKey,
+                tenantDbName: jwtTenantDb,
             },
             process.env.JWT_SECRET || "hrm_default_secret_key_2026",
             { expiresIn: process.env.JWT_EXPIRES_IN || "12h" }
@@ -501,7 +531,7 @@ module.exports.faceEnroll = async (req, res) => {
 
         // If autoLogin is requested (e.g. enrolling directly during attendance login)
         if (autoLogin) {
-            const access = await loadAccessForEmployee(employee._id);
+            const access = await loadAccessForEmployee(employee._id, req.license);
             if (access.error) {
                 return res.status(403).json({ success: false, message: access.error });
             }

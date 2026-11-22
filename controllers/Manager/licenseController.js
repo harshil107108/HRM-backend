@@ -539,6 +539,19 @@ exports.toggleLicenseActive = async (req, res) => {
         license.metadata.lastActionTimestamp = new Date();
         await license.save();
         invalidateLicenseCache();
+        invalidateLicenseKeyCache(license.licenseKey);
+
+        // Synchronize tenant database and admin permissions
+        if (license.tenantDbName) {
+            try {
+                await provisionTenantDatabase(license.tenantDbName, {
+                    clientInfo: license.clientInfo,
+                    adminCredentials: license.adminCredentials,
+                });
+            } catch (syncErr) {
+                console.error("Warning: sync tenant DB failed during updateLicense:", syncErr);
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -577,6 +590,19 @@ exports.updateLicenseStatus = async (req, res) => {
 
         await license.save();
         invalidateLicenseCache();
+        invalidateLicenseKeyCache(license.licenseKey);
+
+        // Synchronize tenant database and admin permissions
+        if (license.tenantDbName) {
+            try {
+                await provisionTenantDatabase(license.tenantDbName, {
+                    clientInfo: license.clientInfo,
+                    adminCredentials: license.adminCredentials,
+                });
+            } catch (syncErr) {
+                console.error("Warning: sync tenant DB failed during updateLicense:", syncErr);
+            }
+        }
 
         await LicenseAuditLog.create({
             licenseKey: license.licenseKey,
@@ -721,6 +747,19 @@ exports.updateLicense = async (req, res) => {
 
         await license.save();
         invalidateLicenseCache();
+        invalidateLicenseKeyCache(license.licenseKey);
+
+        // Synchronize tenant database and admin permissions
+        if (license.tenantDbName) {
+            try {
+                await provisionTenantDatabase(license.tenantDbName, {
+                    clientInfo: license.clientInfo,
+                    adminCredentials: license.adminCredentials,
+                });
+            } catch (syncErr) {
+                console.error("Warning: sync tenant DB failed during updateLicense:", syncErr);
+            }
+        }
 
         return res.status(200).json({
             success: true,
@@ -776,6 +815,19 @@ exports.extendLicenseExpiry = async (req, res) => {
         license.signaturePayload = signaturePayload;
         await license.save();
         invalidateLicenseCache();
+        invalidateLicenseKeyCache(license.licenseKey);
+
+        // Synchronize tenant database and admin permissions
+        if (license.tenantDbName) {
+            try {
+                await provisionTenantDatabase(license.tenantDbName, {
+                    clientInfo: license.clientInfo,
+                    adminCredentials: license.adminCredentials,
+                });
+            } catch (syncErr) {
+                console.error("Warning: sync tenant DB failed during updateLicense:", syncErr);
+            }
+        }
 
         await LicenseAuditLog.create({
             licenseKey: license.licenseKey,
@@ -884,6 +936,20 @@ exports.deleteLicense = async (req, res) => {
 
         if (license.isActive) {
             invalidateLicenseCache();
+        }
+        invalidateLicenseKeyCache(license.licenseKey);
+
+        // If an isolated tenant database exists for this license, cleanly drop it
+        if (license.tenantDbName) {
+            try {
+                const { getTenantDb, tenantConnections } = require("../../utils/tenantConnectionManager");
+                const tenantDb = getTenantDb(license.tenantDbName);
+                await tenantDb.dropDatabase();
+                tenantConnections.delete(license.tenantDbName);
+                console.log(`Cleanly dropped tenant database: ${license.tenantDbName}`);
+            } catch (dropErr) {
+                console.error("Warning: could not drop tenant database:", dropErr);
+            }
         }
 
         await LicenseKey.findByIdAndDelete(id);

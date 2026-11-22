@@ -22,8 +22,10 @@ const toPlainPermissions = (permissions) => {
 
 // Effective rights per active menu code, applying the parent-group rule.
 // Super Admin gets every action on every active menu without requiring a license key.
+// Tenant Administrator (ADMIN) gets every action on every menu allowed by the tenant license.
 // Non-Super-Admin users are strictly bounded by activeLicense.effectiveLimits.allAllowedModules.
-const effectivePermissions = (menus, rolePermissions, isSuperAdmin, activeLicense) => {
+const effectivePermissions = (menus, rolePermissions, isSuperAdmin, activeLicense, roleCode = "") => {
+    const isTenantAdmin = isSuperAdmin || roleCode === "SUPER_ADMIN" || roleCode === "ADMIN";
     const perms = toPlainPermissions(rolePermissions);
     const byId = new Map(menus.map((m) => [String(m._id), m]));
     const result = {};
@@ -45,7 +47,7 @@ const effectivePermissions = (menus, rolePermissions, isSuperAdmin, activeLicens
         if (parent && !parent.isActive) return;
         if (parent && !isLicensed(parent.menuCode)) return;
 
-        if (isSuperAdmin) {
+        if (isTenantAdmin) {
             result[menu.menuCode] = [...ACTIONS];
             return;
         }
